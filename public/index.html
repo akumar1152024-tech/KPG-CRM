@@ -4,14 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>KPG Coaching Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
 </head>
-<body>
-  <!-- Mobile overlay -->
+<body data-coach-name="Kash">
+
   <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
-  <!-- Sidebar -->
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
       <div class="logo">
@@ -21,479 +23,54 @@
       <button class="sidebar-close" id="sidebarClose">✕</button>
     </div>
     <nav class="sidebar-nav">
-      <a href="#" class="nav-item active" data-section="dashboard">
-        <span class="nav-icon">🏠</span><span class="nav-label">Dashboard</span>
-      </a>
-      <a href="#" class="nav-item" data-section="crm">
-        <span class="nav-icon">👥</span><span class="nav-label">CRM</span>
-      </a>
-      <a href="#" class="nav-item" data-section="finance">
-        <span class="nav-icon">💰</span><span class="nav-label">Finance</span>
-      </a>
-      <a href="#" class="nav-item" data-section="pipeline">
-        <span class="nav-icon">📊</span><span class="nav-label">Pipeline</span>
-      </a>
-      <a href="#" class="nav-item" data-section="leads">
-        <span class="nav-icon">🎯</span><span class="nav-label">Leads</span>
-      </a>
+      <div class="nav-group-label">Main</div>
+      <a href="#" class="nav-item active" data-section="dashboard">Dashboard</a>
+      <a href="#" class="nav-item" data-section="crm">CRM <span class="nav-badge" id="crmNavBadge"></span></a>
+      <a href="#" class="nav-item" data-section="finance">Finance</a>
+      <a href="#" class="nav-item" data-section="pipeline">Pipeline</a>
+
+      <div class="nav-group-label">Marketing</div>
+      <a href="#" class="nav-item" data-section="leads">Leads</a>
+      <a href="#" class="nav-item" data-section="meta-ads">Meta Ads</a>
+      <a href="#" class="nav-item" data-section="content">Content</a>
+
+      <div class="nav-group-label">Tools</div>
+      <a href="#" class="nav-item" data-section="automations">Automations</a>
+      <a href="#" class="nav-item" data-section="tasks">Tasks <span class="nav-badge danger" id="tasksNavBadge"></span></a>
+      <a href="#" class="nav-item" data-section="sheets">Google Sheets</a>
+      <a href="#" class="nav-item" data-section="settings">Settings</a>
     </nav>
     <div class="sidebar-footer">
-      <a href="/webhooks/test" target="_blank" class="webhook-link">🔗 Webhook Endpoints</a>
+      <a href="/webhooks/test" target="_blank" class="webhook-link">Webhook Docs</a>
     </div>
   </aside>
 
-  <!-- Main content -->
   <div class="main-wrapper">
     <header class="topbar">
       <button class="hamburger" id="hamburger">☰</button>
       <h1 class="page-title" id="pageTitle">Dashboard</h1>
+      <div class="topbar-right">
+        <span id="topbarGreeting" class="topbar-greeting"></span>
+      </div>
     </header>
 
     <main class="content">
-      <!-- DASHBOARD SECTION -->
-      <section id="section-dashboard" class="section active">
-        <div id="dashboardContent">
-          <div class="loading-spinner">Loading...</div>
-        </div>
-      </section>
-
-      <!-- CRM SECTION -->
-      <section id="section-crm" class="section">
-        <div class="section-header">
-          <div class="stat-badges" id="crmStats">
-            <span class="badge badge-active" id="statActive">Active: 0</span>
-            <span class="badge badge-lead" id="statLeads">Leads: 0</span>
-            <span class="badge badge-trial" id="statTrials">Trial: 0</span>
-            <span class="badge badge-churned" id="statChurned">Churned: 0</span>
-          </div>
-          <button class="btn btn-primary" onclick="CRM.openAddModal()">+ Add Client</button>
-        </div>
-
-        <div class="filters-bar">
-          <input type="text" id="crmSearch" placeholder="Search clients..." class="input-search" oninput="CRM.filter()" />
-          <select id="crmFilterStatus" class="select-filter" onchange="CRM.filter()">
-            <option value="">All Status</option>
-            <option value="active">Active</option>
-            <option value="lead">Lead</option>
-            <option value="trial">Trial</option>
-            <option value="churned">Churned</option>
-          </select>
-          <select id="crmFilterSource" class="select-filter" onchange="CRM.filter()">
-            <option value="">All Sources</option>
-            <option value="Instagram">Instagram</option>
-            <option value="TikTok">TikTok</option>
-            <option value="YouTube">YouTube</option>
-            <option value="Typeform">Typeform</option>
-            <option value="Referral">Referral</option>
-            <option value="Calendly">Calendly</option>
-            <option value="WhatsApp">WhatsApp</option>
-            <option value="Other">Other</option>
-          </select>
-        </div>
-
-        <div class="table-wrapper">
-          <table class="data-table" id="clientsTable">
-            <thead>
-              <tr>
-                <th>Name</th><th>Email</th><th>Source</th><th>Program</th>
-                <th>Value/mo</th><th>Status</th><th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="clientsTableBody">
-              <tr><td colspan="7" class="loading-cell">Loading clients...</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <!-- FINANCE SECTION -->
-      <section id="section-finance" class="section">
-        <div class="finance-month-bar">
-          <button class="btn btn-outline" onclick="Finance.prevMonth()">&#8249; Prev</button>
-          <span class="month-display" id="financeMonthDisplay">Loading...</span>
-          <button class="btn btn-outline" onclick="Finance.nextMonth()">Next &#8250;</button>
-          <button class="btn btn-secondary" onclick="Finance.exportCSV()">⬇ Export CSV</button>
-        </div>
-
-        <div class="stat-cards" id="financeStats">
-          <div class="stat-card"><div class="stat-value" id="fRevenue">$0</div><div class="stat-label">Revenue</div></div>
-          <div class="stat-card"><div class="stat-value red" id="fExpenses">$0</div><div class="stat-label">Expenses</div></div>
-          <div class="stat-card"><div class="stat-value" id="fProfit">$0</div><div class="stat-label">Net Profit</div></div>
-          <div class="stat-card"><div class="stat-value" id="fMargin">0%</div><div class="stat-label">Profit Margin</div></div>
-        </div>
-
-        <div class="goals-progress" id="goalsProgress">
-          <div class="progress-item">
-            <div class="progress-header"><span>Revenue Goal</span><span id="revGoalLabel">$0 / $0</span></div>
-            <div class="progress-bar"><div class="progress-fill" id="revGoalBar" style="width:0%"></div></div>
-          </div>
-          <div class="progress-item">
-            <div class="progress-header"><span>Profit Goal</span><span id="profGoalLabel">$0 / $0</span></div>
-            <div class="progress-bar"><div class="progress-fill green" id="profGoalBar" style="width:0%"></div></div>
-          </div>
-        </div>
-
-        <div class="finance-grid">
-          <div class="finance-panel">
-            <div class="panel-header">
-              <h3>Income</h3>
-              <button class="btn btn-primary btn-sm" onclick="Finance.openIncomeModal()">+ Add</button>
-            </div>
-            <div id="incomeList" class="entry-list"><div class="loading-cell">Loading...</div></div>
-          </div>
-          <div class="finance-panel">
-            <div class="panel-header">
-              <h3>Expenses</h3>
-              <button class="btn btn-primary btn-sm" onclick="Finance.openExpenseModal()">+ Add</button>
-            </div>
-            <div id="expenseList" class="entry-list"><div class="loading-cell">Loading...</div></div>
-          </div>
-        </div>
-
-        <div class="chart-grid">
-          <div class="chart-card">
-            <h3>Revenue vs Expenses (6 Months)</h3>
-            <canvas id="financeBarChart" height="200"></canvas>
-          </div>
-          <div class="chart-card">
-            <h3>Expenses by Category</h3>
-            <div id="expCategoryBars"></div>
-          </div>
-        </div>
-
-        <div class="goals-panel">
-          <h3>Set Monthly Goals</h3>
-          <form id="goalsForm" class="goals-form" onsubmit="Finance.saveGoals(event)">
-            <div class="form-row">
-              <div class="form-group">
-                <label>Revenue Goal ($)</label>
-                <input type="number" id="goalRevenue" class="form-input" placeholder="e.g. 3000" />
-              </div>
-              <div class="form-group">
-                <label>Profit Goal ($)</label>
-                <input type="number" id="goalProfit" class="form-input" placeholder="e.g. 2000" />
-              </div>
-              <button type="submit" class="btn btn-primary">Save Goals</button>
-            </div>
-          </form>
-        </div>
-      </section>
-
-      <!-- PIPELINE SECTION -->
-      <section id="section-pipeline" class="section">
-        <div class="section-header">
-          <div id="pipelineStats" class="pipeline-meta">
-            <span>Total pipeline value: <strong id="pipelineTotalValue">$0</strong></span>
-            <span>Conversion rate: <strong id="pipelineConvRate">0%</strong></span>
-          </div>
-          <button class="btn btn-primary" onclick="Pipeline.openAddModal()">+ Add Prospect</button>
-        </div>
-        <div class="kanban-board" id="kanbanBoard">
-          <div class="loading-cell">Loading pipeline...</div>
-        </div>
-      </section>
-
-      <!-- LEADS SECTION -->
-      <section id="section-leads" class="section">
-        <div class="section-header">
-          <button class="btn btn-primary" onclick="Leads.openAddModal()">+ Log Lead</button>
-        </div>
-
-        <div class="filters-bar">
-          <input type="text" id="leadsSearch" placeholder="Search leads..." class="input-search" oninput="Leads.filter()" />
-          <select id="leadsFilterPlatform" class="select-filter" onchange="Leads.filter()">
-            <option value="">All Platforms</option>
-            <option value="Instagram">Instagram</option>
-            <option value="TikTok">TikTok</option>
-            <option value="YouTube">YouTube</option>
-            <option value="Website">Website</option>
-            <option value="ManyChat">ManyChat</option>
-            <option value="WhatsApp">WhatsApp</option>
-            <option value="Referral">Referral</option>
-          </select>
-          <select id="leadsFilterStatus" class="select-filter" onchange="Leads.filter()">
-            <option value="">All Status</option>
-            <option value="new">New</option>
-            <option value="contacted">Contacted</option>
-            <option value="qualified">Qualified</option>
-            <option value="converted">Converted</option>
-          </select>
-        </div>
-
-        <div class="leads-grid">
-          <div class="leads-panel">
-            <div class="table-wrapper">
-              <table class="data-table" id="leadsTable">
-                <thead>
-                  <tr><th>Name</th><th>Platform</th><th>Detail</th><th>Status</th><th>Date</th><th>Actions</th></tr>
-                </thead>
-                <tbody id="leadsTableBody">
-                  <tr><td colspan="6" class="loading-cell">Loading leads...</td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-          <div class="leads-charts">
-            <div class="chart-card">
-              <h3>Leads by Platform</h3>
-              <canvas id="leadsDonutChart" height="220"></canvas>
-            </div>
-            <div class="chart-card" id="convRateCard">
-              <h3>Conversion Rate by Platform</h3>
-              <div id="conversionRates"></div>
-            </div>
-          </div>
-        </div>
-      </section>
+      <section id="section-dashboard" class="section active"><div class="loading-cell">Loading…</div></section>
+      <section id="section-crm"       class="section"></section>
+      <section id="section-finance"   class="section"></section>
+      <section id="section-pipeline"  class="section"></section>
+      <section id="section-leads"     class="section"></section>
+      <section id="section-meta-ads"  class="section"></section>
+      <section id="section-content"   class="section"></section>
+      <section id="section-automations" class="section"></section>
+      <section id="section-tasks"     class="section"></section>
+      <section id="section-sheets"    class="section"></section>
+      <section id="section-settings"  class="section"></section>
     </main>
   </div>
 
-  <!-- ==================== MODALS ==================== -->
-
-  <!-- CRM: Add/Edit Client Modal -->
-  <div class="modal-overlay" id="clientModal">
-    <div class="modal">
-      <div class="modal-header">
-        <h2 id="clientModalTitle">Add Client</h2>
-        <button class="modal-close" onclick="CRM.closeModal()">✕</button>
-      </div>
-      <form id="clientForm" onsubmit="CRM.submitClient(event)">
-        <input type="hidden" id="clientId" />
-        <div class="form-grid">
-          <div class="form-group"><label>Name *</label><input type="text" id="clientName" class="form-input" required /></div>
-          <div class="form-group"><label>Email</label><input type="email" id="clientEmail" class="form-input" /></div>
-          <div class="form-group"><label>Phone</label><input type="tel" id="clientPhone" class="form-input" /></div>
-          <div class="form-group">
-            <label>Status</label>
-            <select id="clientStatus" class="form-input">
-              <option value="lead">Lead</option>
-              <option value="active">Active</option>
-              <option value="trial">Trial</option>
-              <option value="churned">Churned</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Source</label>
-            <select id="clientSource" class="form-input">
-              <option value="">Select source</option>
-              <option>Instagram</option><option>TikTok</option><option>YouTube</option>
-              <option>Typeform</option><option>Referral</option><option>Calendly</option>
-              <option>WhatsApp</option><option>Other</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Program Type</label>
-            <select id="clientProgram" class="form-input">
-              <option value="">Select program</option>
-              <option value="1:1 coaching">1:1 Coaching</option>
-              <option value="group program">Group Program</option>
-              <option value="course">Course</option>
-            </select>
-          </div>
-          <div class="form-group"><label>Monthly Value ($)</label><input type="number" id="clientValue" class="form-input" min="0" step="0.01" /></div>
-          <div class="form-group"><label>Start Date</label><input type="date" id="clientStartDate" class="form-input" /></div>
-        </div>
-        <div class="form-group full-width"><label>Notes</label><textarea id="clientNotes" class="form-input" rows="3"></textarea></div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-outline" onclick="CRM.closeModal()">Cancel</button>
-          <button type="submit" class="btn btn-primary" id="clientSubmitBtn">Add Client</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- CRM: Client Detail Panel -->
-  <div class="modal-overlay" id="clientDetailModal">
-    <div class="modal modal-large">
-      <div class="modal-header">
-        <h2 id="detailClientName">Client Details</h2>
-        <div class="modal-actions">
-          <button class="btn btn-outline btn-sm" id="detailEditBtn">Edit</button>
-          <button class="modal-close" onclick="CRM.closeDetailModal()">✕</button>
-        </div>
-      </div>
-      <div class="detail-grid" id="clientDetailBody">Loading...</div>
-      <div class="interaction-section">
-        <h3>Interaction History</h3>
-        <div id="interactionHistory" class="interaction-list"></div>
-        <div class="add-interaction-form">
-          <h4>Log Interaction</h4>
-          <div class="form-row">
-            <select id="intType" class="form-input">
-              <option value="note">Note</option>
-              <option value="call">Call</option>
-              <option value="whatsapp">WhatsApp</option>
-              <option value="email">Email</option>
-              <option value="meeting">Meeting</option>
-            </select>
-            <input type="date" id="intDate" class="form-input" />
-            <button class="btn btn-primary" onclick="CRM.addInteraction()">Log</button>
-          </div>
-          <textarea id="intSummary" class="form-input" placeholder="Summary..." rows="2"></textarea>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Finance: Income Modal -->
-  <div class="modal-overlay" id="incomeModal">
-    <div class="modal modal-sm">
-      <div class="modal-header">
-        <h2>Log Income</h2>
-        <button class="modal-close" onclick="Finance.closeIncomeModal()">✕</button>
-      </div>
-      <form onsubmit="Finance.submitIncome(event)">
-        <div class="form-group"><label>Description *</label><input type="text" id="incDesc" class="form-input" required /></div>
-        <div class="form-group"><label>Amount ($) *</label><input type="number" id="incAmount" class="form-input" min="0" step="0.01" required /></div>
-        <div class="form-group">
-          <label>Category</label>
-          <select id="incCategory" class="form-input">
-            <option value="1:1 coaching">1:1 Coaching</option>
-            <option value="group program">Group Program</option>
-            <option value="course sale">Course Sale</option>
-            <option value="stripe payment">Stripe Payment</option>
-            <option value="other">Other</option>
-          </select>
-        </div>
-        <div class="form-group"><label>Date</label><input type="date" id="incDate" class="form-input" /></div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-outline" onclick="Finance.closeIncomeModal()">Cancel</button>
-          <button type="submit" class="btn btn-primary">Log Income</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- Finance: Expense Modal -->
-  <div class="modal-overlay" id="expenseModal">
-    <div class="modal modal-sm">
-      <div class="modal-header">
-        <h2>Log Expense</h2>
-        <button class="modal-close" onclick="Finance.closeExpenseModal()">✕</button>
-      </div>
-      <form onsubmit="Finance.submitExpense(event)">
-        <div class="form-group"><label>Description *</label><input type="text" id="expDesc" class="form-input" required /></div>
-        <div class="form-group"><label>Amount ($) *</label><input type="number" id="expAmount" class="form-input" min="0" step="0.01" required /></div>
-        <div class="form-group">
-          <label>Category</label>
-          <select id="expCategory" class="form-input">
-            <option value="software">Software</option>
-            <option value="advertising">Advertising</option>
-            <option value="content creation">Content Creation</option>
-            <option value="education">Education</option>
-            <option value="equipment">Equipment</option>
-            <option value="contractor">Contractor</option>
-            <option value="other">Other</option>
-          </select>
-        </div>
-        <div class="form-group"><label>Date</label><input type="date" id="expDate" class="form-input" /></div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-outline" onclick="Finance.closeExpenseModal()">Cancel</button>
-          <button type="submit" class="btn btn-primary">Log Expense</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- Pipeline: Add/Edit Prospect Modal -->
-  <div class="modal-overlay" id="pipelineModal">
-    <div class="modal modal-sm">
-      <div class="modal-header">
-        <h2 id="pipelineModalTitle">Add Prospect</h2>
-        <button class="modal-close" onclick="Pipeline.closeModal()">✕</button>
-      </div>
-      <form id="pipelineForm" onsubmit="Pipeline.submitProspect(event)">
-        <input type="hidden" id="prospectId" />
-        <div class="form-group"><label>Name *</label><input type="text" id="prospectName" class="form-input" required /></div>
-        <div class="form-group"><label>Email</label><input type="email" id="prospectEmail" class="form-input" /></div>
-        <div class="form-group"><label>Phone</label><input type="tel" id="prospectPhone" class="form-input" /></div>
-        <div class="form-group"><label>Source</label><input type="text" id="prospectSource" class="form-input" placeholder="Instagram, Referral..." /></div>
-        <div class="form-group">
-          <label>Stage</label>
-          <select id="prospectStage" class="form-input">
-            <option value="awareness">Awareness</option>
-            <option value="typeform_submitted">Typeform Submitted</option>
-            <option value="calendly_booked">Calendly Booked</option>
-            <option value="proposal_sent">Proposal Sent</option>
-            <option value="signed">Signed</option>
-          </select>
-        </div>
-        <div class="form-group"><label>Potential Value ($)</label><input type="number" id="prospectValue" class="form-input" min="0" step="0.01" /></div>
-        <div class="form-group"><label>Notes</label><textarea id="prospectNotes" class="form-input" rows="2"></textarea></div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-outline" onclick="Pipeline.closeModal()">Cancel</button>
-          <button type="submit" class="btn btn-primary" id="prospectSubmitBtn">Add Prospect</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- Leads: Add Lead Modal -->
-  <div class="modal-overlay" id="leadsModal">
-    <div class="modal modal-sm">
-      <div class="modal-header">
-        <h2 id="leadsModalTitle">Log Lead</h2>
-        <button class="modal-close" onclick="Leads.closeModal()">✕</button>
-      </div>
-      <form id="leadsForm" onsubmit="Leads.submitLead(event)">
-        <input type="hidden" id="leadId" />
-        <div class="form-group"><label>Name *</label><input type="text" id="leadName" class="form-input" required /></div>
-        <div class="form-group"><label>Email</label><input type="email" id="leadEmail" class="form-input" /></div>
-        <div class="form-group">
-          <label>Platform</label>
-          <select id="leadPlatform" class="form-input">
-            <option value="">Select platform</option>
-            <option>Instagram</option><option>TikTok</option><option>YouTube</option>
-            <option>Website</option><option>ManyChat</option><option>WhatsApp</option><option>Referral</option>
-          </select>
-        </div>
-        <div class="form-group"><label>Source Detail</label><input type="text" id="leadSourceDetail" class="form-input" placeholder="e.g. Fat loss reel, story poll..." /></div>
-        <div class="form-group">
-          <label>Status</label>
-          <select id="leadStatus" class="form-input">
-            <option value="new">New</option>
-            <option value="contacted">Contacted</option>
-            <option value="qualified">Qualified</option>
-            <option value="converted">Converted</option>
-          </select>
-        </div>
-        <div class="form-group"><label>Date Captured</label><input type="date" id="leadDate" class="form-input" /></div>
-        <div class="form-group"><label>Notes</label><textarea id="leadNotes" class="form-input" rows="2"></textarea></div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-outline" onclick="Leads.closeModal()">Cancel</button>
-          <button type="submit" class="btn btn-primary" id="leadSubmitBtn">Log Lead</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- Leads: Convert Modal -->
-  <div class="modal-overlay" id="convertModal">
-    <div class="modal modal-sm">
-      <div class="modal-header">
-        <h2>Convert Lead to Client</h2>
-        <button class="modal-close" onclick="Leads.closeConvertModal()">✕</button>
-      </div>
-      <div class="form-group">
-        <label>Link to existing client:</label>
-        <select id="convertClientSelect" class="form-input"></select>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-outline" onclick="Leads.closeConvertModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="Leads.confirmConvert()">Convert</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Toast container -->
   <div id="toastContainer" class="toast-container"></div>
 
-  <!-- Scripts -->
   <script src="app.js"></script>
-  <script src="dashboard.js"></script>
-  <script src="crm.js"></script>
-  <script src="finance.js"></script>
-  <script src="pipeline.js"></script>
-  <script src="leads.js"></script>
 </body>
 </html>
