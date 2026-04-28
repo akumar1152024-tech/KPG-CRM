@@ -598,3 +598,11 @@ select.form-input { cursor: pointer; }
 .tabs-bar { display:flex; gap:4px; border-bottom:1px solid var(--border); margin-bottom:16px; }
 .leads-panel { min-width:0; }
 @media(max-width:768px){ .leads-grid { grid-template-columns:1fr; } }
+
+/* ── Automations / Meta / Settings additions ── */
+.auto-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:16px; }
+.auto-step { font-size:12px; color:var(--text-muted); padding:2px 0; }
+.conn-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+.conn-dot.on  { background:var(--success); }
+.conn-dot.off { background:var(--border); }
+@media(max-width:768px){ .settings-grid { grid-template-columns:1fr; } }
