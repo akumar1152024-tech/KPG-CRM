@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const cron = require('node-cron');
+const session = require('express-session');
 const { initDB, getDB } = require('./database');
 
 const app = express();
@@ -9,7 +10,51 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+// Session middleware (before static + routes)
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'kpg-dev-secret-change-me',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { maxAge: 7 * 24 * 60 * 60 * 1000, httpOnly: true, sameSite: 'lax' },
+}));
+
+// ── Auth routes (no protection needed) ───────────────────────────────────────
+app.get('/login', (req, res) => {
+  if (req.session.authed) return res.redirect('/');
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
+app.post('/login', (req, res) => {
+  const password = process.env.LOGIN_PASSWORD;
+  if (!password) {
+    // No password set — allow through
+    req.session.authed = true;
+    return res.redirect('/');
+  }
+  if (req.body.password === password) {
+    req.session.authed = true;
+    return res.redirect('/');
+  }
+  res.redirect('/login?error=1');
+});
+
+app.post('/logout', (req, res) => {
+  req.session.destroy(() => res.redirect('/login'));
+});
+
+// ── Auth guard ────────────────────────────────────────────────────────────────
+function requireAuth(req, res, next) {
+  if (!process.env.LOGIN_PASSWORD) return next(); // dev mode: no password set
+  if (req.session.authed) return next();
+  if (req.path.startsWith('/api/') || req.path.startsWith('/webhooks/')) {
+    return res.status(401).json({ success: false, error: 'Unauthorized' });
+  }
+  res.redirect('/login');
+}
+
 app.use(express.static(path.join(__dirname, 'public')));
+app.use(requireAuth);
 
 // API Routes
 app.use('/api/dashboard', require('./routes/dashboard'));
