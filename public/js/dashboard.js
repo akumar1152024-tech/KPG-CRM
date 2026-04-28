@@ -4,8 +4,17 @@ async function loadDashboard() {
   const el = document.getElementById('section-dashboard');
   el.innerHTML = '<div class="loading-cell">Loading…</div>';
 
-  const res = await fetch('/api/dashboard');
-  const { data: d } = await res.json();
+  let d;
+  try {
+    const res = await fetch('/api/dashboard');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error || 'API error');
+    d = json.data;
+  } catch (err) {
+    el.innerHTML = `<div class="alert-bar" style="margin:20px">⚠️ Failed to load dashboard: ${err.message}. <a href="#" onclick="loadDashboard();return false">Retry</a></div>`;
+    return;
+  }
 
   el.innerHTML = `
     <div class="stat-cards">
