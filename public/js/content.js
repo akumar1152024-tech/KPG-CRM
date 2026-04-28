@@ -86,30 +86,98 @@ async function loadPlanning(el) {
     </div>` : '<div class="empty-state"><div class="empty-icon">📅</div>No content planned yet. Add some!</div>'}`;
 }
 
+let analyticsPlatform = 'YouTube', analyticsDays = '30', analyticsChart = null;
+
 async function loadAnalytics(el) {
-  const res = await fetch('/api/content/analytics/summary').then(r => r.json());
+  const [sumRes, postsRes] = await Promise.all([
+    fetch('/api/content/analytics/summary').then(r => r.json()),
+    fetch(`/api/content/analytics/${analyticsPlatform}?days=${analyticsDays}&sort=views`).then(r => r.json()),
+  ]);
+
   const platforms = ['YouTube','TikTok','Instagram'];
+  const PLAT_ICON = { YouTube:'▶️', TikTok:'🎵', Instagram:'📷' };
+
   el.innerHTML = `
-    <div class="section-header"><h3 style="margin:0">Content Analytics</h3></div>
-    ${res.success && res.data.byPlatform.length ? `
-    <div class="stat-cards">${res.data.byPlatform.map(p => `
-      <div class="stat-card">
-        <div class="stat-value" style="font-size:20px">${(p.total_views||0).toLocaleString()}</div>
-        <div class="stat-label">${p.platform} Views</div>
-        <div class="stat-sub">${p.posts} posts · ${p.avg_engagement}% eng.</div>
-      </div>`).join('')}</div>` : ''}
-    <div class="auto-grid mt-20">
-      ${platforms.map(p => `
-        <div class="card" style="text-align:center;padding:24px">
-          <div style="font-size:32px;margin-bottom:8px">${{YouTube:'▶️',TikTok:'🎵',Instagram:'📷'}[p]}</div>
-          <div style="font-weight:700;margin-bottom:4px">${p}</div>
-          <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px">
-            ${res.data?.lastScraped ? 'Last scraped: '+res.data.lastScraped : 'Never scraped'}
-          </div>
-          <button class="btn btn-primary btn-sm" onclick="contentScrape('${p.toLowerCase()}',this)">⟳ Scrape Now</button>
+    <div class="section-header" style="flex-wrap:wrap;gap:10px">
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${platforms.map(p => `
+          <button class="chip ${p===analyticsPlatform?'active':''}" onclick="contentSetPlatform('${p}')">${PLAT_ICON[p]} ${p}</button>`).join('')}
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select class="select-filter" onchange="contentSetDays(this.value)">
+          <option value="7"  ${analyticsDays==='7' ?'selected':''}>Last 7 days</option>
+          <option value="30" ${analyticsDays==='30'?'selected':''}>Last 30 days</option>
+          <option value="90" ${analyticsDays==='90'?'selected':''}>Last 90 days</option>
+          <option value=""   ${analyticsDays===''  ?'selected':''}>All time</option>
+        </select>
+        <button class="btn btn-primary btn-sm" onclick="contentScrape('${analyticsPlatform.toLowerCase()}',this)">⟳ Scrape Now</button>
+      </div>
+    </div>
+
+    ${sumRes.success && sumRes.data.byPlatform.length ? `
+    <div class="stat-cards mt-16">
+      ${sumRes.data.byPlatform.map(p => `
+        <div class="stat-card">
+          <div class="stat-value" style="font-size:20px">${(p.total_views||0).toLocaleString()}</div>
+          <div class="stat-label">${p.platform} Views</div>
+          <div class="stat-sub">${p.posts} posts · ${p.avg_engagement}% eng.</div>
         </div>`).join('')}
-    </div>`;
+    </div>` : ''}
+
+    ${postsRes.success && postsRes.data.length ? `
+    <div class="card mt-20">
+      <div class="panel-header"><h3>Views per post — last 20 (${analyticsPlatform})</h3></div>
+      <canvas id="analyticsBarChart" height="100"></canvas>
+    </div>
+    <div class="content-posts-grid mt-20" id="analyticsPostsGrid">
+      ${postsRes.data.slice(0,20).map(p => `
+        <div class="content-post-card">
+          ${p.thumbnail_url
+            ? `<img src="${p.thumbnail_url}" class="content-post-thumb" loading="lazy" onerror="this.style.display='none'">`
+            : `<div class="content-post-thumb-placeholder">${PLAT_ICON[analyticsPlatform]||'📱'}</div>`}
+          <div class="content-post-body">
+            <div class="content-post-caption">${(p.caption||'No caption').substring(0,100)}${(p.caption||'').length>100?'…':''}</div>
+            <div class="content-post-stats">
+              <span>👁 ${(p.views||0).toLocaleString()}</span>
+              <span>❤ ${(p.likes||0).toLocaleString()}</span>
+              <span>💬 ${p.comments||0}</span>
+              <span>📈 ${p.engagement_rate||0}%</span>
+            </div>
+            ${p.posted_at ? `<div style="font-size:10px;color:var(--text-muted);margin-top:4px">📅 ${p.posted_at.split('T')[0]||p.posted_at}</div>` : ''}
+          </div>
+        </div>`).join('')}
+    </div>` : `
+    <div class="empty-state mt-20">
+      <div class="empty-icon">${PLAT_ICON[analyticsPlatform]}</div>
+      No ${analyticsPlatform} posts scraped yet.<br>
+      <button class="btn btn-primary mt-16" onclick="contentScrape('${analyticsPlatform.toLowerCase()}',this)">⟳ Scrape ${analyticsPlatform} Now</button>
+    </div>`}`;
+
+  if (postsRes.success && postsRes.data.length) buildAnalyticsChart(postsRes.data.slice(0, 20));
 }
+
+function buildAnalyticsChart(posts) {
+  const ctx = document.getElementById('analyticsBarChart');
+  if (!ctx) return;
+  if (analyticsChart) analyticsChart.destroy();
+  analyticsChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: posts.map((p, i) => p.posted_at ? p.posted_at.split('T')[0].slice(5) : `Post ${i+1}`),
+      datasets: [{
+        label: 'Views',
+        data: posts.map(p => p.views || 0),
+        backgroundColor: analyticsPlatform === 'YouTube' ? '#FF000080'
+          : analyticsPlatform === 'TikTok' ? '#01010180'
+          : '#E1306C80',
+      }],
+    },
+    options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } },
+  });
+}
+
+function contentSetPlatform(p) { analyticsPlatform = p; contentSwitch('analytics'); }
+function contentSetDays(d)     { analyticsDays = d;      contentSwitch('analytics'); }
 
 async function loadIdeas(el) {
   el.innerHTML = '<div class="loading-cell">Loading…</div>';

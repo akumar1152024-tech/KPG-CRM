@@ -65,10 +65,15 @@ router.get('/analytics/summary', (req, res) => {
 router.get('/analytics/:platform', (req, res) => {
   try {
     const db = getDB();
-    const { sort = 'views' } = req.query;
+    const { sort = 'views', days } = req.query;
     const orderMap = { views: 'views DESC', likes: 'likes DESC', recent: 'posted_at DESC', engagement: 'engagement_rate DESC' };
-    const rows = db.prepare(`SELECT * FROM content_analytics WHERE platform=? ORDER BY ${orderMap[sort] || 'views DESC'} LIMIT 50`)
-      .all(req.params.platform);
+    let where = 'platform=?';
+    const params = [req.params.platform];
+    if (days && parseInt(days) > 0) {
+      where += ` AND (scraped_at >= datetime('now', '-${parseInt(days)} days') OR posted_at >= date('now', '-${parseInt(days)} days'))`;
+    }
+    const rows = db.prepare(`SELECT * FROM content_analytics WHERE ${where} ORDER BY ${orderMap[sort] || 'views DESC'} LIMIT 50`)
+      .all(...params);
     res.json({ success: true, data: rows });
   } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
