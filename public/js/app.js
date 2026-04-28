@@ -1,15 +1,16 @@
-const SECTIONS = {
-  dashboard:   loadDashboard,
-  crm:         loadCRM,
-  finance:     loadFinance,
-  pipeline:    loadPipeline,
-  leads:       loadLeads,
-  'meta-ads':  loadMetaAds,
-  content:     loadContent,
-  automations: loadAutomations,
-  tasks:       loadTasks,
-  sheets:      loadSheets,
-  settings:    loadSettings,
+// Map section keys to loader function names (looked up at call time via window[])
+const SECTION_FN = {
+  dashboard:   'loadDashboard',
+  crm:         'loadCRM',
+  finance:     'loadFinance',
+  pipeline:    'loadPipeline',
+  leads:       'loadLeads',
+  'meta-ads':  'loadMetaAds',
+  content:     'loadContent',
+  automations: 'loadAutomations',
+  tasks:       'loadTasks',
+  sheets:      'loadSheets',
+  settings:    'loadSettings',
 };
 
 const TITLES = {
@@ -41,8 +42,9 @@ function navigate(section) {
   const titleEl = document.getElementById('pageTitle');
   if (titleEl) titleEl.textContent = TITLES[section] || section;
 
-  // Call section loader
-  if (SECTIONS[section]) SECTIONS[section]();
+  // Look up loader at call time so feature files can override stubs
+  const fn = window[SECTION_FN[section]];
+  if (fn) fn();
 }
 
 function setGreeting() {
