@@ -593,3 +593,8 @@ select.form-input { cursor: pointer; }
 .kanban-col-footer { padding:8px 14px; border-top:1px solid var(--border); font-size:11px; color:var(--text-muted); }
 .kanban-col.drag-over { outline:2px dashed var(--primary); outline-offset:-2px; }
 .kanban-card-note  { font-size:11px; color:var(--text-muted); margin-top:4px; line-height:1.4; }
+
+/* ── Leads & Tasks additions ── */
+.tabs-bar { display:flex; gap:4px; border-bottom:1px solid var(--border); margin-bottom:16px; }
+.leads-panel { min-width:0; }
+@media(max-width:768px){ .leads-grid { grid-template-columns:1fr; } }
