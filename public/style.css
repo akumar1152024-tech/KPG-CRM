@@ -569,3 +569,11 @@ select.form-input { cursor: pointer; }
 .activity-summary { font-size:12px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .activity-date { font-size:11px; color:var(--text-muted); flex-shrink:0; }
 @media(max-width:768px){ .dash-grid { grid-template-columns:1fr; } }
+
+/* ── CRM ── */
+.nav-group-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:rgba(255,255,255,.4); padding:16px 20px 4px; }
+.status-chips { display:flex; gap:6px; flex-wrap:wrap; }
+.chip { padding:4px 12px; border-radius:20px; border:1px solid var(--border); background:var(--bg); color:var(--text-muted); font-size:12px; font-weight:500; cursor:pointer; transition:all .15s; }
+.chip.active,.chip:hover { background:var(--primary); color:#fff; border-color:var(--primary); }
+.crm-stat-row { display:flex; gap:8px; flex-wrap:wrap; padding:8px 0 16px; }
+.field-label { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted); display:block; margin-bottom:2px; }
