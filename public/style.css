@@ -606,3 +606,8 @@ select.form-input { cursor: pointer; }
 .conn-dot.on  { background:var(--success); }
 .conn-dot.off { background:var(--border); }
 @media(max-width:768px){ .settings-grid { grid-template-columns:1fr; } }
+
+/* ── Content & Sheets additions ── */
+.content-cal-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:16px; margin-top:16px; }
+.content-cal-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px; }
+.sync-card-desc { font-size:12px; color:var(--text-muted); margin-bottom:10px; }
