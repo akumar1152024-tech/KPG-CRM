@@ -46,8 +46,9 @@ app.post('/logout', (req, res) => {
 // ── Auth guard ────────────────────────────────────────────────────────────────
 function requireAuth(req, res, next) {
   if (!process.env.LOGIN_PASSWORD) return next(); // dev mode: no password set
+  if (req.path.startsWith('/webhooks/')) return next(); // Zapier/external — no session
   if (req.session.authed) return next();
-  if (req.path.startsWith('/api/') || req.path.startsWith('/webhooks/')) {
+  if (req.path.startsWith('/api/')) {
     return res.status(401).json({ success: false, error: 'Unauthorized' });
   }
   res.redirect('/login');
