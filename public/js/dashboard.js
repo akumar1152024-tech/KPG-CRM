@@ -51,6 +51,16 @@ async function loadDashboard() {
     <div class="card mt-20">
       <div class="panel-header"><h3>Revenue vs Expenses — last 6 months</h3></div>
       <canvas id="revenueChart" height="120"></canvas>
+    </div>
+
+    <div class="card mt-20" style="border-color:var(--danger)20">
+      <div class="panel-header">
+        <div>
+          <h3 style="margin:0">Sample Data</h3>
+          <p style="font-size:12px;color:var(--text-muted);margin:3px 0 0">Remove the pre-loaded demo clients, transactions and leads to start fresh.</p>
+        </div>
+        <button class="btn btn-danger btn-sm" onclick="dashClearData()">🗑 Clear Sample Data</button>
+      </div>
     </div>`;
 
   buildChart(d.sixMonthChart);
@@ -103,4 +113,12 @@ function buildChart(chartData) {
     },
     options: { responsive: true, plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true } } }
   });
+}
+
+async function dashClearData() {
+  if (!confirm('⚠️ This permanently deletes ALL clients, transactions, leads and tasks. Are you sure?')) return;
+  if (!confirm('Last warning — this cannot be undone. Delete everything?')) return;
+  const res = await fetch('/api/settings/clear-sample-data', { method: 'POST' }).then(r => r.json());
+  if (res.success) { alert(res.message || 'All data cleared.'); loadDashboard(); }
+  else alert(res.error || 'Clear failed');
 }
