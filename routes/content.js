@@ -62,6 +62,50 @@ router.get('/analytics/summary', (req, res) => {
   } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
 
+router.get('/analytics/:platform/stats', (req, res) => {
+  try {
+    const db = getDB();
+    const { platform } = req.params;
+
+    const summary = db.prepare(`
+      SELECT COUNT(*) as total_posts, SUM(views) as total_views,
+        ROUND(AVG(views),0) as avg_views, ROUND(AVG(engagement_rate),2) as avg_engagement,
+        MAX(engagement_rate) as best_engagement, MAX(views) as best_views
+      FROM content_analytics WHERE platform=?
+    `).get(platform);
+
+    const bestDay = db.prepare(`
+      SELECT strftime('%w', posted_at) as dow, SUM(views) as total_views
+      FROM content_analytics WHERE platform=? AND posted_at IS NOT NULL
+      GROUP BY dow ORDER BY total_views DESC LIMIT 1
+    `).get(platform);
+
+    const growth = db.prepare(`
+      SELECT
+        SUM(CASE WHEN posted_at >= date('now','-7 days') THEN views ELSE 0 END) as this_week_views,
+        SUM(CASE WHEN posted_at >= date('now','-14 days') AND posted_at < date('now','-7 days') THEN views ELSE 0 END) as last_week_views,
+        COUNT(CASE WHEN posted_at >= date('now','-7 days') THEN 1 END) as this_week_posts,
+        COUNT(CASE WHEN posted_at >= date('now','-14 days') AND posted_at < date('now','-7 days') THEN 1 END) as last_week_posts
+      FROM content_analytics WHERE platform=?
+    `).get(platform);
+
+    const bestPost = db.prepare(
+      'SELECT * FROM content_analytics WHERE platform=? ORDER BY engagement_rate DESC LIMIT 1'
+    ).get(platform);
+
+    const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    res.json({
+      success: true,
+      data: {
+        summary,
+        bestDayOfWeek: bestDay ? DAYS[parseInt(bestDay.dow)] : null,
+        growth,
+        bestPost,
+      }
+    });
+  } catch (err) { res.status(500).json({ success: false, error: err.message }); }
+});
+
 router.get('/analytics/:platform', (req, res) => {
   try {
     const db = getDB();

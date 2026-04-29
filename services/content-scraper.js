@@ -95,7 +95,12 @@ async function scrapeInstagram() {
     resultsLimit: 30,
   });
 
-  const posts = items.flatMap(u => u.latestPosts || []);
+  const posts = items.flatMap(u => (u.latestPosts || []).map(p => ({
+    ...p,
+    url: p.url || (p.shortCode ? `https://www.instagram.com/p/${p.shortCode}/` : null),
+    thumbnailUrl: p.displayUrl || p.thumbnailUrl || null,
+  })));
+
   const count = saveContentAnalytics(db, 'Instagram', posts);
   console.log(`[Scraper] Instagram: ${count} posts saved`);
   return posts;
