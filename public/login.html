@@ -3,46 +3,67 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>KPG Coach — Login</title>
+  <title>Kash Performance Group</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: 'Inter', sans-serif;
-      background: #0A4A3A;
+      font-family: "Inter", sans-serif;
+      background: #0A0A0A;
       min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
     }
     .card {
-      background: #fff;
+      background: #1A1A1A;
+      border: 1px solid #2A2A2A;
       border-radius: 16px;
-      padding: 40px 36px;
+      padding: 48px 40px;
       width: 100%;
       max-width: 380px;
-      box-shadow: 0 20px 60px rgba(0,0,0,.25);
+      box-shadow: 0 20px 60px rgba(0,0,0,.8);
     }
-    .logo { text-align: center; margin-bottom: 28px; }
-    .logo-icon { font-size: 40px; display: block; margin-bottom: 8px; }
-    .logo-name { font-size: 20px; font-weight: 700; color: #0A4A3A; }
-    .logo-sub  { font-size: 13px; color: #6c757d; margin-top: 2px; }
-    label { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px; }
+    .logo { text-align: center; margin-bottom: 36px; }
+    .logo-name {
+      font-size: 36px; font-weight: 800; color: #C9A84C;
+      letter-spacing: .1em; line-height: 1;
+    }
+    .logo-sub {
+      font-size: 10px; color: #A8B4C0; margin-top: 8px;
+      letter-spacing: .25em; font-weight: 600; text-transform: uppercase;
+    }
+    .logo-divider {
+      width: 40px; height: 2px; background: #C9A84C;
+      margin: 16px auto 0; border-radius: 2px;
+    }
+    label {
+      display: block; font-size: 11px; font-weight: 600;
+      color: #7A8A96; margin-bottom: 8px;
+      text-transform: uppercase; letter-spacing: .08em;
+    }
     input[type=password] {
       width: 100%;
-      padding: 10px 14px;
-      border: 1.5px solid #d1d5db;
+      padding: 11px 14px;
+      border: 1px solid #2A2A2A;
       border-radius: 8px;
+      background: #111111;
+      color: #FFFFFF;
       font-size: 15px;
       font-family: inherit;
       outline: none;
-      transition: border-color .15s;
+      transition: border-color .15s, box-shadow .15s;
     }
-    input[type=password]:focus { border-color: #0F6E56; }
+    input[type=password]:focus {
+      border-color: #C9A84C;
+      box-shadow: 0 0 0 3px rgba(201,168,76,.15);
+    }
+    input[type=password]::placeholder { color: #3A3A3A; }
     .error {
-      background: #fee2e2;
-      color: #991b1b;
+      background: rgba(226,75,74,.12);
+      border: 1px solid rgba(226,75,74,.3);
+      color: #E24B4A;
       font-size: 13px;
       padding: 10px 14px;
       border-radius: 8px;
@@ -52,41 +73,41 @@
     .error.show { display: block; }
     button {
       width: 100%;
-      padding: 11px;
-      background: #0F6E56;
-      color: #fff;
+      padding: 13px;
+      background: #C9A84C;
+      color: #0A0A0A;
       border: none;
       border-radius: 8px;
       font-size: 15px;
-      font-weight: 600;
+      font-weight: 700;
       font-family: inherit;
       cursor: pointer;
-      margin-top: 18px;
+      margin-top: 20px;
+      letter-spacing: .04em;
       transition: background .15s;
     }
-    button:hover { background: #0A4A3A; }
+    button:hover { background: #E8C96B; }
   </style>
 </head>
 <body>
   <div class="card">
     <div class="logo">
-      <span class="logo-icon">💪</span>
-      <div class="logo-name">KPG Coach</div>
-      <div class="logo-sub">Kash Performance Group</div>
+      <div class="logo-name">KASH</div>
+      <div class="logo-sub">Performance Group</div>
+      <div class="logo-divider"></div>
     </div>
     <form method="POST" action="/login" id="loginForm">
       <div class="error" id="errMsg">Incorrect password. Try again.</div>
       <div style="margin-bottom:20px">
         <label for="password">Password</label>
-        <input type="password" id="password" name="password" autofocus autocomplete="current-password" />
+        <input type="password" id="password" name="password" autofocus autocomplete="current-password" placeholder="Enter password" />
       </div>
-      <button type="submit">Sign in</button>
+      <button type="submit">Sign In</button>
     </form>
   </div>
   <script>
-    // Show error if redirected back after bad password
-    if (document.referrer.includes('/login') || window.location.search.includes('error')) {
-      document.getElementById('errMsg').classList.add('show');
+    if (document.referrer.includes("/login") || window.location.search.includes("error")) {
+      document.getElementById("errMsg").classList.add("show");
     }
   </script>
 </body>

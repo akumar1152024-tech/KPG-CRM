@@ -1,3 +1,12 @@
+// Chart.js global defaults — dark KPG theme
+document.addEventListener("DOMContentLoaded", () => {
+  if (window.Chart) {
+    Chart.defaults.color = "#A8B4C0";
+    Chart.defaults.borderColor = "#2A2A2A";
+    Chart.defaults.plugins.legend.labels.color = "#A8B4C0";
+  }
+});
+
 // Map section keys to loader function names (looked up at call time via window[])
 const SECTION_FN = {
   dashboard:   'loadDashboard',

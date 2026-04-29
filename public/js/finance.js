@@ -132,8 +132,8 @@ function buildChart(data) {
     data: {
       labels: data.map(d => d.label),
       datasets: [
-        { label: 'Revenue',  data: data.map(d => d.revenue),  backgroundColor: '#0F6E56' },
-        { label: 'Expenses', data: data.map(d => d.expenses), backgroundColor: '#e2534440' },
+        { label: 'Revenue',  data: data.map(d => d.revenue),  backgroundColor: '#C9A84C' },
+        { label: 'Expenses', data: data.map(d => d.expenses), backgroundColor: '#E24B4A40' },
       ]
     },
     options: { responsive: true, plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true } } }

@@ -115,9 +115,9 @@ function buildChart(chartData) {
     data: {
       labels: chartData.map(m => m.label),
       datasets: [
-        { label: 'Revenue',  data: chartData.map(m => m.revenue),  backgroundColor: '#0F6E56' },
+        { label: 'Revenue',  data: chartData.map(m => m.revenue),  backgroundColor: '#C9A84C' },
         { label: 'Expenses', data: chartData.map(m => m.expenses), backgroundColor: '#e2534420' },
-        { label: 'Profit',   data: chartData.map(m => m.profit),   backgroundColor: '#3b82f660', type: 'line', tension: 0.3, borderColor: '#3b82f6', fill: false },
+        { label: 'Profit',   data: chartData.map(m => m.profit),   backgroundColor: '#A8B4C080', type: 'line', tension: 0.3, borderColor: '#A8B4C0', fill: false },
       ]
     },
     options: { responsive: true, plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true } } }
