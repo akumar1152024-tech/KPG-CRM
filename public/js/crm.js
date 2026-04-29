@@ -1,4 +1,4 @@
-let allClients = [], activeStatus = '', crmSearch = '';
+let allClients = [], activeStatus = '', crmSearch = '', crmCurrentClientId = null;
 
 async function loadCRM() {
   const el = document.getElementById('section-crm');
@@ -39,7 +39,10 @@ function crmShell() {
       <div class="modal modal-large">
         <div class="modal-header">
           <h2 id="detailName">Client</h2>
-          <button class="modal-close" onclick="crmCloseDetail()">✕</button>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn btn-primary btn-sm" id="aiInsightBtn" onclick="crmGetInsight()" style="display:none;background:#C9A84C;color:#0A0A0A;border-color:#C9A84C">✨ AI Insight</button>
+            <button class="modal-close" onclick="crmCloseDetail()">✕</button>
+          </div>
         </div>
         <div id="detailBody"></div>
       </div>
@@ -137,8 +140,12 @@ async function crmOpenDetail(id) {
   const res = await fetch(`/api/clients/${id}`).then(r => r.json());
   if (!res.success) return;
   const c = res.data;
+  crmCurrentClientId = id;
+  const aiBtn = document.getElementById('aiInsightBtn');
+  if (aiBtn) aiBtn.style.display = 'inline-flex';
   document.getElementById('detailName').textContent = c.name;
   document.getElementById('detailBody').innerHTML = `
+    <div id="aiInsightPanel" style="display:none;padding:20px 20px 0"></div>
     <div class="detail-fields" style="display:grid;grid-template-columns:1fr 1fr;gap:8px 20px;padding:20px 20px 0">
       <div><span class="field-label">Email</span><div>${c.email||'—'}</div></div>
       <div><span class="field-label">Phone</span><div>${c.phone||'—'}</div></div>
@@ -178,7 +185,87 @@ async function crmOpenDetail(id) {
   document.getElementById('crmDetailPanel').classList.add('open');
 }
 
-function crmCloseDetail() { document.getElementById('crmDetailPanel')?.classList.remove('open'); }
+function crmCloseDetail() {
+  document.getElementById('crmDetailPanel')?.classList.remove('open');
+  crmCurrentClientId = null;
+  const aiBtn = document.getElementById('aiInsightBtn');
+  if (aiBtn) aiBtn.style.display = 'none';
+}
+
+async function crmGetInsight() {
+  const panel = document.getElementById('aiInsightPanel');
+  const btn   = document.getElementById('aiInsightBtn');
+  if (!panel || !crmCurrentClientId) return;
+
+  panel.style.display = 'block';
+  panel.innerHTML = '<div class="loading-cell" style="padding:16px">✨ Claude is analysing this client…</div>';
+  btn.disabled = true;
+  btn.textContent = '✨ Analysing…';
+
+  let res;
+  try {
+    res = await fetch('/api/ai/client-insight', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client_id: crmCurrentClientId }),
+    }).then(r => r.json());
+  } catch (err) {
+    panel.innerHTML = `<div class="alert-bar">⚠️ Network error: ${err.message}</div>`;
+    btn.disabled = false; btn.textContent = '✨ AI Insight';
+    return;
+  }
+
+  btn.disabled = false;
+  btn.textContent = '✨ AI Insight';
+
+  if (!res.success) {
+    panel.innerHTML = `<div class="alert-bar" style="margin:0">⚠️ ${res.error}</div>`;
+    return;
+  }
+
+  const d = res.data;
+  const riskLevel = (d.churn_risk?.level || 'unknown').toLowerCase();
+  const riskColor = { low: '#C9A84C', medium: '#E8C96B', high: '#E24B4A' }[riskLevel] || '#A8B4C0';
+  const riskBg    = { low: 'rgba(201,168,76,.08)', medium: 'rgba(232,201,107,.08)', high: 'rgba(226,75,74,.08)' }[riskLevel] || 'rgba(168,180,192,.08)';
+
+  panel.innerHTML = `
+    <div style="border:1px solid rgba(201,168,76,.5);border-radius:8px;overflow:hidden;margin-bottom:4px">
+      <div style="background:rgba(201,168,76,.1);padding:10px 16px;border-bottom:1px solid rgba(201,168,76,.2);display:flex;align-items:center;gap:8px">
+        <span style="font-size:15px">✨</span>
+        <span style="font-weight:700;color:#C9A84C;font-size:12px;letter-spacing:.06em">AI CLIENT INSIGHT</span>
+        <span style="font-size:10px;color:#7A8A96;margin-left:auto">claude-sonnet-4-6 · ${new Date().toLocaleTimeString()}</span>
+      </div>
+      <div style="padding:16px;display:flex;flex-direction:column;gap:14px">
+
+        <div>
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#7A8A96;margin-bottom:6px">Health Summary</div>
+          <div style="font-size:13px;line-height:1.6;color:#FFFFFF">${d.summary || ''}</div>
+        </div>
+
+        <div>
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#7A8A96;margin-bottom:8px">Action Items</div>
+          ${(d.action_items || []).map((a, i) => `
+            <div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid #2A2A2A;font-size:13px;align-items:flex-start">
+              <span style="color:#C9A84C;font-weight:700;flex-shrink:0;min-width:16px">${i + 1}.</span>
+              <span style="line-height:1.5">${a}</span>
+            </div>`).join('')}
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div style="background:${riskBg};border:1px solid ${riskColor}30;border-radius:6px;padding:12px">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#7A8A96;margin-bottom:6px">Churn Risk</div>
+            <div style="font-size:13px;font-weight:700;color:${riskColor};text-transform:uppercase;margin-bottom:6px">${riskLevel}</div>
+            <div style="font-size:12px;color:#A8B4C0;line-height:1.5">${d.churn_risk?.reason || ''}</div>
+          </div>
+          <div style="background:rgba(201,168,76,.05);border:1px solid rgba(201,168,76,.15);border-radius:6px;padding:12px">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#7A8A96;margin-bottom:6px">Upsell Opportunity</div>
+            <div style="font-size:12px;color:#A8B4C0;line-height:1.5">${d.upsell_opportunity || 'None identified'}</div>
+          </div>
+        </div>
+
+      </div>
+    </div>`;
+}
 
 async function crmLogInteraction(clientId) {
   const payload = { type: document.getElementById('intType').value, date: document.getElementById('intDate').value, summary: document.getElementById('intSummary').value };

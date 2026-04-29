@@ -69,6 +69,7 @@ app.use('/api/tasks', require('./routes/tasks'));
 app.use('/api/content', require('./routes/content'));
 app.use('/api/sheets', require('./routes/sheets'));
 app.use('/api/settings', require('./routes/settings'));
+app.use('/api/ai',       require('./routes/ai'));
 
 // Webhook Routes (no /api/ prefix)
 app.use('/webhooks', require('./routes/webhooks'));
