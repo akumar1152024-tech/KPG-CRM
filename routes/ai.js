@@ -152,33 +152,38 @@ router.post('/client-insight', async (req, res) => {
 // ── POST /api/ai/daily-briefing ───────────────────────────────────────────────
 
 router.post('/daily-briefing', async (req, res) => {
-  const apiKey = requireKey(res); if (!apiKey) return;
   try {
     const db = getDB();
     const now = new Date();
     const month = now.getMonth() + 1;
     const year  = now.getFullYear();
-    const dayName = now.toLocaleDateString('en-US', { weekday: 'long' });
     const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 
-    // Client counts
-    const clients = db.prepare(`
+    // ── DB queries ────────────────────────────────────────────────────────────────
+
+    const clientStats = db.prepare(`
       SELECT
         SUM(CASE WHEN status='active' THEN 1 ELSE 0 END) as active,
-        SUM(CASE WHEN status='trial'  THEN 1 ELSE 0 END) as trial,
-        SUM(CASE WHEN status='active' THEN monthly_value ELSE 0 END) as mrr
+        SUM(CASE WHEN status='trial'  THEN 1 ELSE 0 END) as trial
       FROM clients
     `).get();
 
-    // Finance this month
-    const revenue  = db.prepare("SELECT COALESCE(SUM(amount),0) as t FROM income   WHERE month=? AND year=?").get(month, year);
-    const expenses = db.prepare("SELECT COALESCE(SUM(amount),0) as t FROM expenses WHERE month=? AND year=?").get(month, year);
+    const revenue = db.prepare('SELECT COALESCE(SUM(amount),0) as t FROM income   WHERE month=? AND year=?').get(month, year);
+    db.prepare('SELECT COALESCE(SUM(amount),0) as t FROM expenses WHERE month=? AND year=?').get(month, year);
 
-    // Tasks
-    const overdue   = db.prepare("SELECT COUNT(*) as c FROM tasks WHERE status='pending' AND due_date < date('now')").get();
-    const todayTasks = db.prepare("SELECT title FROM tasks WHERE status='pending' AND due_date = date('now') LIMIT 5").all();
+    const goals       = db.prepare('SELECT revenue_goal FROM monthly_goals WHERE month=? AND year=?').get(month, year);
+    const revenueGoal = goals?.revenue_goal || 0;
 
-    // Clients needing follow-up
+    const overdueCount    = db.prepare("SELECT COUNT(*) as c FROM tasks WHERE status='pending' AND due_date < date('now')").get().c;
+    const mostUrgentTask  = db.prepare("SELECT title FROM tasks WHERE status='pending' AND due_date < date('now') ORDER BY due_date ASC LIMIT 1").get();
+
+    const leadsThisWeek = db.prepare("SELECT COUNT(*) as c FROM leads WHERE date_captured >= date('now','-7 days')").get().c;
+    const topSource     = db.prepare(`
+      SELECT source_platform, COUNT(*) as cnt FROM leads
+      WHERE date_captured >= date('now','-7 days') AND source_platform IS NOT NULL
+      GROUP BY source_platform ORDER BY cnt DESC LIMIT 1
+    `).get();
+
     const followUps = db.prepare(`
       SELECT c.name FROM clients c
       LEFT JOIN interactions i ON c.id = i.client_id
@@ -188,59 +193,80 @@ router.post('/daily-briefing', async (req, res) => {
       LIMIT 5
     `).all();
 
-    // Pipeline
-    const pipe = db.prepare(`
-      SELECT COUNT(*) as cnt, COALESCE(SUM(potential_value),0) as val FROM pipeline
-      WHERE stage NOT IN ('signed','lost')
+    const trialClients = db.prepare("SELECT name FROM clients WHERE status='trial' LIMIT 3").all();
+
+    const pipeTotal          = db.prepare("SELECT COUNT(*) as c FROM pipeline WHERE stage NOT IN ('signed','lost')").get().c;
+    const proposalProspects  = db.prepare("SELECT name FROM pipeline WHERE stage='proposal_sent' LIMIT 5").all();
+
+    const highChurnClient = db.prepare(`
+      SELECT c.name FROM clients c
+      LEFT JOIN interactions i ON c.id = i.client_id
+      WHERE c.status IN ('active','trial')
+      GROUP BY c.id
+      HAVING MAX(i.date) IS NULL OR MAX(i.date) < date('now','-30 days')
+      LIMIT 1
     `).get();
-    const stuckPipe = db.prepare(`
-      SELECT COUNT(*) as cnt FROM pipeline
-      WHERE stage NOT IN ('signed','lost')
-        AND created_at < datetime('now','-14 days')
-    `).get();
 
-    // Recent interactions
-    const recentInts = db.prepare(`
-      SELECT i.date, i.type, i.summary, c.name as client_name
-      FROM interactions i JOIN clients c ON i.client_id = c.id
-      WHERE i.date >= date('now','-3 days')
-      ORDER BY i.date DESC LIMIT 5
-    `).all();
+    // ── Build sections ────────────────────────────────────────────────────────────
 
-    const todayStr  = todayTasks.length ? todayTasks.map(t => `- ${t.title}`).join('\n') : '- None';
-    const followStr = followUps.length  ? followUps.map(c => `- ${c.name}`).join('\n') : '- None';
-    const recentStr = recentInts.length ? recentInts.map(i => `- ${i.date} [${i.type}] ${i.client_name}: ${i.summary||''}`).join('\n') : '- None';
+    const revMade = revenue.t || 0;
+    const revPct  = revenueGoal > 0 ? Math.round((revMade / revenueGoal) * 100) : 0;
+    const revNeed = Math.max(0, revenueGoal - revMade);
 
-    const prompt = `You are a daily business assistant for Kash, a fitness coach at Kash Performance Group specializing in South Asian professionals.
+    const revenueSection = revenueGoal > 0
+      ? `REVENUE: $${revMade.toLocaleString()} made this month, ${revPct}% of your $${revenueGoal.toLocaleString()} goal. Need $${revNeed.toLocaleString()} more to hit target.`
+      : `REVENUE: $${revMade.toLocaleString()} made this month. No revenue goal set.`;
 
-Today: ${dateStr}
+    let clientSection = `CLIENTS: ${clientStats.active || 0} active client${clientStats.active !== 1 ? 's' : ''}.`;
+    if (followUps.length) {
+      const names = followUps.map(c => c.name).join(', ');
+      clientSection += ` ${names} need${followUps.length === 1 ? 's' : ''} follow-up today — no contact in 14+ days.`;
+    }
+    if (trialClients.length) {
+      const names = trialClients.map(c => c.name).join(', ');
+      clientSection += ` ${names} ${trialClients.length === 1 ? 'is' : 'are'} on trial and need${trialClients.length === 1 ? 's' : ''} a conversion conversation.`;
+    }
 
-Business snapshot:
-- Active clients: ${clients.active} | Trial: ${clients.trial} | MRR: $${(clients.mrr||0).toLocaleString()}
-- Revenue this month: $${(revenue.t||0).toLocaleString()} | Expenses: $${(expenses.t||0).toLocaleString()} | Net: $${((revenue.t||0)-(expenses.t||0)).toLocaleString()}
-- Overdue tasks: ${overdue.c} | Tasks due today: ${todayTasks.length}
+    let pipelineSection = `PIPELINE: ${pipeTotal} prospect${pipeTotal !== 1 ? 's' : ''} total.`;
+    if (proposalProspects.length) {
+      pipelineSection += ` ${proposalProspects.length} at proposal stage — follow up today.`;
+    }
 
-Tasks due today:
-${todayStr}
+    let tasksSection = `TASKS: ${overdueCount} overdue task${overdueCount !== 1 ? 's' : ''}.`;
+    if (overdueCount > 0 && mostUrgentTask) {
+      tasksSection += ` Most urgent: ${mostUrgentTask.title}.`;
+    }
 
-Clients needing follow-up (14+ days no contact):
-${followStr}
+    let leadsSection = `LEADS: ${leadsThisWeek} new lead${leadsThisWeek !== 1 ? 's' : ''} this week.`;
+    if (topSource) {
+      leadsSection += ` Top source: ${topSource.source_platform}.`;
+    }
 
-Active pipeline: ${pipe.cnt} prospects worth $${(pipe.val||0).toLocaleString()} | Stuck >14 days: ${stuckPipe.cnt}
+    let topPriority;
+    if (highChurnClient) {
+      topPriority = `Reach out to ${highChurnClient.name} immediately — they are at high risk of churning.`;
+    } else if (proposalProspects.length > 0) {
+      topPriority = `Follow up with ${proposalProspects[0].name} on their proposal — your most actionable revenue opportunity today.`;
+    } else if (trialClients.length > 0) {
+      topPriority = `Have a conversion conversation with ${trialClients[0].name} — move them from trial to a paid plan.`;
+    } else if (revenueGoal > 0 && revPct < 50) {
+      topPriority = `Revenue is at ${revPct}% of goal. Focus on closing new business or upselling existing clients today.`;
+    } else {
+      topPriority = `You are on track. Keep delivering excellent results for your clients and have a great day.`;
+    }
 
-Recent interactions (last 3 days):
-${recentStr}
+    // ── Assemble response ────────────────────────────────────────────────────────
 
-Write a concise, energising morning briefing for Kash.
-Format as JSON with exactly these keys:
-- greeting (string): warm personalised good morning with the day and date
-- summary (string): 2-sentence business pulse combining client health and revenue
-- focus_today (array of exactly 3 strings): top priorities ranked by urgency — be specific, name actual clients or tasks where possible
-- pipeline_note (string): 1 sentence on pipeline health and what needs attention
-- motivation (string): 1 closing line specific to coaching South Asian professionals`;
-
-    const text = await callClaude(apiKey, prompt, 800);
-    res.json({ success: true, data: parseJSON(text) });
+    res.json({
+      success: true,
+      data: {
+        greeting:      `Good morning Kash. Here is your business snapshot for ${dateStr}.`,
+        summary:       `${revenueSection}\n\n${clientSection}`,
+        focus_today:   [tasksSection, leadsSection, pipelineSection],
+        pipeline_note: pipelineSection,
+        motivation:    `TOP PRIORITY TODAY: ${topPriority}`,
+      },
+    });
   } catch (err) {
     console.error('[AI] daily-briefing error:', err.message);
     res.status(500).json({ success: false, error: err.message });
