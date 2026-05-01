@@ -228,34 +228,91 @@ router.get('/test', (req, res) => {
 });
 
 // POST /webhooks/stripe
+// No signature verification — accepts all POSTs (Stripe native + Zapier)
 router.post('/stripe', async (req, res) => {
   const db = getDB();
+
+  // Log immediately — before any processing so nothing is ever lost
+  logWebhook(db, '/webhooks/stripe', req.body);
+
+  // Always respond 200 first so Stripe doesn't retry while we process
+  res.json({ success: true, received: true });
+
   try {
-    const { customer_email, customer_name, amount, description, payment_id } = req.body;
-    logWebhook(db, '/webhooks/stripe', req.body);
-    if (!customer_email || !amount) return res.status(400).json({ success: false, error: 'customer_email and amount required' });
+    const body = req.body;
+    let email, name, amountDollars, description, paymentId, isFailed;
 
-    const isFailed = payment_id && payment_id.toLowerCase().includes('failed');
-    const client = findOrCreateClient(db, customer_email, customer_name);
+    if (body.type && body.data && body.data.object) {
+      // ── Native Stripe webhook event format ───────────────────────────────────
+      const obj  = body.data.object;
+      const type = body.type;
 
-    if (!isFailed) {
+      isFailed = type === 'payment_intent.payment_failed' ||
+                 type === 'charge.failed' ||
+                 type === 'invoice.payment_failed';
+
+      // Extract email — Stripe puts it in different places depending on event type
+      email = obj.receipt_email ||
+              obj.customer_email ||
+              obj.billing_details?.email ||
+              obj.customer_details?.email ||
+              obj.metadata?.email ||
+              null;
+
+      name  = obj.billing_details?.name ||
+              obj.customer_details?.name ||
+              obj.metadata?.name ||
+              null;
+
+      // Amount is in cents for PaymentIntent/Charge, already dollars for some custom events
+      const rawAmount = obj.amount_received ?? obj.amount ?? obj.amount_total ?? 0;
+      amountDollars = rawAmount > 1000 ? rawAmount / 100 : rawAmount;
+
+      description = obj.description || obj.metadata?.description || `Stripe ${type}`;
+      paymentId   = obj.id || null;
+
+    } else {
+      // ── Zapier-style flat fields (legacy / manual test) ──────────────────────
+      email         = body.customer_email || body.email || null;
+      name          = body.customer_name  || body.name  || null;
+      amountDollars = parseFloat(body.amount || 0);
+      description   = body.description   || null;
+      paymentId     = body.payment_id     || null;
+      isFailed      = paymentId && paymentId.toLowerCase().includes('failed');
+    }
+
+    if (!email && !name) {
+      console.warn('[stripe webhook] No email or name found in payload — logged but no client created');
+      return;
+    }
+
+    const client = findOrCreateClient(db, email, name);
+
+    if (!isFailed && amountDollars > 0) {
       const d = new Date();
       db.prepare('INSERT INTO income (description, amount, category, stripe_payment_id, client_id, date, month, year) VALUES (?,?,?,?,?,?,?,?)')
-        .run(description || `Stripe payment from ${customer_name || customer_email}`, parseFloat(amount), 'stripe payment', payment_id || null, client?.id || null, d.toISOString().split('T')[0], d.getMonth()+1, d.getFullYear());
+        .run(
+          description || `Stripe payment from ${name || email}`,
+          amountDollars,
+          'stripe payment',
+          paymentId || null,
+          client?.id || null,
+          d.toISOString().split('T')[0],
+          d.getMonth() + 1,
+          d.getFullYear()
+        );
       if (client) {
-        db.prepare('INSERT INTO interactions (client_id, type, summary, date) VALUES (?,?,?,date("now"))')
-          .run(client.id, 'stripe_payment', `Stripe payment received: $${parseFloat(amount).toFixed(2)}${description ? ' — ' + description : ''}`);
+        db.prepare("INSERT INTO interactions (client_id, type, summary, date) VALUES (?,?,?,date('now'))")
+          .run(client.id, 'stripe_payment', `Stripe payment received: $${amountDollars.toFixed(2)}${description ? ' — ' + description : ''}`);
         await maybeRunSequence(client.id, 'payment_received');
       }
-    } else if (client) {
+    } else if (isFailed && client) {
       const { runAutomation } = require('../services/automations');
       await runAutomation('paymentFailed', client.id);
     }
 
-    res.json({ success: true, message: `${isFailed ? 'Payment failure' : 'Payment'} processed for ${customer_name || customer_email}` });
   } catch (err) {
-    console.error('/webhooks/stripe error:', err.message);
-    res.status(500).json({ success: false, error: err.message });
+    console.error('/webhooks/stripe processing error:', err.message);
   }
 });
 
