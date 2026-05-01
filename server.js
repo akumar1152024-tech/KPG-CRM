@@ -74,6 +74,27 @@ app.use('/api/ai',       require('./routes/ai'));
 // Webhook Routes (no /api/ prefix)
 app.use('/webhooks', require('./routes/webhooks'));
 
+// ── Stripe debug endpoint (protected by LOGIN_PASSWORD) ───────────────────────
+app.get('/api/debug/stripe', (req, res) => {
+  if (!req.session.authed) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    const db = getDB();
+    const webhooks = db.prepare(
+      "SELECT id, endpoint, status, created_at, payload FROM webhooks_log WHERE endpoint LIKE '%stripe%' ORDER BY created_at DESC LIMIT 5"
+    ).all().map(r => ({ ...r, payload: (() => { try { return JSON.parse(r.payload); } catch { return r.payload; } })() }));
+    const income = db.prepare(
+      'SELECT id, description, amount, category, stripe_payment_id, client_id, date, created_at FROM income ORDER BY created_at DESC LIMIT 5'
+    ).all();
+    const clients = db.prepare(
+      'SELECT id, name, email, status, created_at FROM clients ORDER BY created_at DESC LIMIT 5'
+    ).all();
+    const dbPath = process.env.DB_PATH || './business.db';
+    res.json({ dbPath, webhooks, income, clients });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // SPA fallback
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
