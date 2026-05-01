@@ -74,7 +74,23 @@ app.use('/api/ai',       require('./routes/ai'));
 // Webhook Routes (no /api/ prefix)
 app.use('/webhooks', require('./routes/webhooks'));
 
-// ── Stripe debug endpoint (protected by LOGIN_PASSWORD) ───────────────────────
+// ── DB write test (no auth — for Railway diagnostics) ────────────────────────
+app.get('/api/debug/write-test', (req, res) => {
+  let wrote = false, read = false, rowCount = 0;
+  try {
+    const db = getDB();
+    db.prepare("INSERT INTO webhooks_log (endpoint, payload, status) VALUES (?,?,?)").run('test', '{"test":true}', 'test');
+    wrote = true;
+    const row = db.prepare("SELECT id FROM webhooks_log WHERE endpoint='test' AND status='test' ORDER BY id DESC LIMIT 1").get();
+    read = !!row;
+    rowCount = db.prepare("SELECT COUNT(*) as c FROM webhooks_log").get().c;
+  } catch (err) {
+    return res.json({ wrote, read, path: process.env.DB_PATH || './business.db', rowCount, error: err.message });
+  }
+  res.json({ wrote, read, path: process.env.DB_PATH || './business.db', rowCount });
+});
+
+
 app.get('/api/debug/stripe', (req, res) => {
   if (!req.session.authed) return res.status(401).json({ error: 'Unauthorized' });
   try {
