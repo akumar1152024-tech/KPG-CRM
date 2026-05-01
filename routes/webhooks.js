@@ -4,6 +4,7 @@ const { getDB } = require('../database');
 
 function logWebhook(db, endpoint, payload, status = 'received') {
   try {
+    console.log(`[webhook] ${endpoint}`, JSON.stringify(payload));
     db.prepare('INSERT INTO webhooks_log (endpoint, payload, status) VALUES (?,?,?)').run(endpoint, JSON.stringify(payload), status);
   } catch (e) { console.error('Webhook log error:', e.message); }
 }
@@ -412,15 +413,34 @@ router.post('/gmail', (req, res) => {
 router.post('/formspree', async (req, res) => {
   const db = getDB();
   try {
-    const { email, name, message } = req.body;
+    // Log first — before any validation so nothing is ever lost
     logWebhook(db, '/webhooks/formspree', req.body);
-    if (!email) return res.status(400).json({ success: false, error: 'email required' });
-    const lead = findOrCreateLead(db, email, name, null, 'Website', 'Formspree contact form');
-    if (message) {
-      db.prepare("UPDATE leads SET notes=? WHERE id=?").run(message.substring(0, 500), lead.id);
+
+    const b = req.body;
+
+    // Resolve email from any common Formspree field name
+    const email = b.email || b.Email || b._replyto || b['your-email'] || b['Email Address'] || null;
+
+    // Resolve name from any common Formspree field name
+    const name  = b.name  || b.Name  || b['your-name'] || b.fullname || b['Full Name'] || null;
+
+    // Resolve message/notes
+    const message = b.message || b.Message || b.notes || b.Notes || null;
+
+    if (email) {
+      const lead = findOrCreateLead(db, email, name, null, 'Website', 'Formspree contact form');
+      if (message) {
+        db.prepare('UPDATE leads SET notes=? WHERE id=?').run(message.substring(0, 500), lead.id);
+      }
+      await maybeRunSequence(lead.id, 'new_lead');
+      res.json({ success: true, message: `Formspree submission from ${name || email} captured` });
+    } else {
+      // No email found — still create a lead so nothing is lost; store full body as notes
+      const lead = findOrCreateLead(db, null, name, null, 'Website', 'Formspree contact form');
+      db.prepare('UPDATE leads SET notes=? WHERE id=?').run(JSON.stringify(b).substring(0, 500), lead.id);
+      await maybeRunSequence(lead.id, 'new_lead');
+      res.json({ success: true, message: 'Formspree submission captured (no email field found — raw body stored in notes)' });
     }
-    await maybeRunSequence(lead.id, 'new_lead');
-    res.json({ success: true, message: `Formspree submission from ${name || email} captured` });
   } catch (err) {
     console.error('/webhooks/formspree error:', err.message);
     res.status(500).json({ success: false, error: err.message });
