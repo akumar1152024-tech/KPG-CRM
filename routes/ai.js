@@ -2,41 +2,6 @@ const express = require('express');
 const router = express.Router();
 const { getDB } = require('../database');
 
-// ── Shared helper ─────────────────────────────────────────────────────────────
-
-async function callClaude(apiKey, prompt, maxTokens = 1024) {
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: maxTokens,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  });
-  if (!r.ok) {
-    const t = await r.text();
-    throw new Error(`Anthropic ${r.status}: ${t.slice(0, 200)}`);
-  }
-  const d = await r.json();
-  return d.content?.[0]?.text || '';
-}
-
-function parseJSON(text) {
-  const m = text.match(/\{[\s\S]*\}/);
-  if (!m) throw new Error('No JSON block in response');
-  return JSON.parse(m[0]);
-}
-
-function requireKey(res) {
-  const k = process.env.ANTHROPIC_API_KEY;
-  if (!k) { res.status(503).json({ success: false, error: 'ANTHROPIC_API_KEY not configured in .env' }); return null; }
-  return k;
-}
 
 // ── POST /api/ai/client-insight ───────────────────────────────────────────────
 
@@ -276,7 +241,6 @@ router.post('/daily-briefing', async (req, res) => {
 // ── POST /api/ai/pipeline-advice ──────────────────────────────────────────────
 
 router.post('/pipeline-advice', async (req, res) => {
-  const apiKey = requireKey(res); if (!apiKey) return;
   try {
     const { prospect_id } = req.body;
     if (!prospect_id) return res.status(400).json({ success: false, error: 'prospect_id required' });
@@ -285,34 +249,49 @@ router.post('/pipeline-advice', async (req, res) => {
     const p = db.prepare('SELECT * FROM pipeline WHERE id = ?').get(prospect_id);
     if (!p) return res.status(404).json({ success: false, error: 'Prospect not found' });
 
-    const days = Math.floor((Date.now() - new Date(p.created_at)) / 86400000);
-    const STAGE_LABELS = {
-      new_lead: 'New Lead', typeform_submitted: 'Typeform Submitted',
-      calendly_booked: 'Calendly Booked', proposal_sent: 'Proposal Sent',
-      signed: 'Signed', lost: 'Lost',
+    const calendly = process.env.CALENDLY_BOOKING_URL || '[CALENDLY_BOOKING_URL]';
+    const firstName = p.name.split(' ')[0];
+
+    // ── Next step by stage ────────────────────────────────────────────────────────
+
+    const NEXT_STEP = {
+      new_lead:           'Send intro message and qualify with 3 questions: What is your goal? What have you tried before? What is your timeline?',
+      typeform_submitted: 'Review their answers and book a discovery call. Send your Calendly link with a personalised message referencing their form answers.',
+      calendly_booked:    'Prepare for the call. Review their Typeform answers. Lead with their specific goal. Have pricing ready.',
+      proposal_sent:      'Follow up in 48 hours if no response. Address the most common objection: price. Offer a payment plan option.',
+      lost:               'Wait 30 days then re-engage with a new angle or special offer.',
     };
 
-    const prompt = `You are a sales coach for Kash at Kash Performance Group, a premium fitness coaching business for South Asian professionals (doctors, engineers, lawyers, finance professionals).
+    const best_next_step = NEXT_STEP[p.stage] || 'Review the prospect\'s details and decide the most appropriate next contact.';
 
-Prospect details:
-Name: ${p.name}
-Stage: ${STAGE_LABELS[p.stage] || p.stage}
-Days in pipeline: ${days}
-Source: ${p.source || 'Unknown'}
-Potential value: $${p.potential_value || 0}/month
-Email: ${p.email || 'Unknown'}
-Notes: ${p.notes || 'None'}
+    // ── Likely objections by source ───────────────────────────────────────────────
 
-Kash's context: He coaches high-achieving South Asian professionals on fitness, nutrition, and lifestyle. USP: understands their culture, work pressures, and family dynamics. Typical program: 1:1 coaching at $400-800/month. Common objections: "too busy", "need to think about it", "is it worth the cost?", "my family won't support it". Discovery calls are 45 min on Zoom. Next steps usually involve: sending a Calendly link, following up after a no-show, nudging after a proposal, or re-engaging cold leads.
+    const OBJECTIONS = {
+      Meta_Ad:   ['Price — they are comparison shopping. Focus on your unique results and ROI.', 'Skeptical about ads — share real client stories.', 'Timing — they filled the form impulsively. Create urgency.'],
+      Instagram: ['Not sure if coaching is right for them. Share a relevant client transformation.', 'Price — justify the investment with outcome data.', 'Too busy — show them how you work around packed schedules.'],
+      TikTok:    ['Skeptical about online coaching. Show proof — screenshots, testimonials.', 'Think it\'s a trend, not a real service. Emphasise your track record.', 'Price sensitivity — they may expect a low-cost product.'],
+      Referral:  ['Timing — they are interested but busy. Create urgency with limited spots.', 'Comparing you to what their friend paid. Be consistent on pricing.', 'High expectations from the referral — clarify what you deliver.'],
+      Typeform:  ['Already interested — move fast. Book the call within 24 hours.', 'May ghost if you wait — follow up the same day.', 'Over-thinking it — make the next step easy and low commitment.'],
+    };
 
-Give Kash clear, confident, culturally-aware advice.
-Format as JSON with exactly these keys:
-- best_next_step (string): the single most important action Kash should take TODAY — be very specific
-- likely_objections (array of exactly 3 strings): the most realistic objections this prospect will raise, based on their stage and background
-- suggested_message (string): the actual WhatsApp or SMS message Kash should send RIGHT NOW — conversational, warm, non-pushy, 3-5 sentences max, ready to copy-paste`;
+    const likely_objections = OBJECTIONS[p.source] || [
+      'Price and timing are the most common objections. Be ready for both.',
+      'They may need more social proof — share a relevant transformation.',
+      'Uncertainty about results — have specific outcome examples ready.',
+    ];
 
-    const text = await callClaude(apiKey, prompt, 800);
-    res.json({ success: true, data: parseJSON(text) });
+    // ── Suggested message by stage ────────────────────────────────────────────────
+
+    const MESSAGES = {
+      new_lead:           `Hey ${firstName}! Saw you reached out — I help South Asian professionals get in the best shape of their lives around busy schedules. Quick question — what is your main goal right now?`,
+      typeform_submitted: `Hey ${firstName}, just reviewed your application — love your goals. I think we can get you there. Here is my calendar to chat: ${calendly}`,
+      calendly_booked:    `Hey ${firstName}, looking forward to our call! Just to make the most of our time — what is the #1 thing you want to walk away knowing from our conversation?`,
+      proposal_sent:      `Hey ${firstName}, just checking in on the proposal I sent over. Any questions I can answer? Happy to jump on a quick call or work out a payment plan if that helps.`,
+    };
+
+    const suggested_message = MESSAGES[p.stage] || `Hey ${firstName}, just wanted to check in and see where your head is at. Let me know if you have any questions — happy to help.`;
+
+    res.json({ success: true, data: { best_next_step, likely_objections, suggested_message } });
   } catch (err) {
     console.error('[AI] pipeline-advice error:', err.message);
     res.status(500).json({ success: false, error: err.message });
