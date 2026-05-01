@@ -1,4 +1,4 @@
-let finMonth = new Date().getMonth() + 1, finYear = new Date().getFullYear(), finChart = null;
+let finMonth = new Date().getMonth() + 1, finYear = new Date().getFullYear(), finChart = null, finExpenses = [];
 
 async function loadFinance() {
   const el = document.getElementById('section-finance');
@@ -36,6 +36,45 @@ function finShell() {
       <div class="chart-card"><h3>Revenue vs Expenses — 6 months</h3><canvas id="finBarChart" height="200"></canvas></div>
       <div class="chart-card"><h3>Expense categories</h3><div id="expCatBars"></div></div>
     </div>
+    <!-- Expense edit modal -->
+    <div class="modal-overlay" id="expEditModal">
+      <div class="modal modal-sm">
+        <div class="modal-header">
+          <h2>Edit Expense</h2>
+          <button class="modal-close" onclick="finCloseExpenseEdit()">✕</button>
+        </div>
+        <form onsubmit="finSaveExpense(event)">
+          <input type="hidden" id="expEditId" />
+          <div class="form-group"><label>Description *</label><input id="expEditDesc" class="form-input" required /></div>
+          <div class="form-group"><label>Amount ($) *</label><input id="expEditAmount" type="number" class="form-input" min="0" step="0.01" required /></div>
+          <div class="form-group"><label>Category</label>
+            <select id="expEditCat" class="form-input">
+              <option value="software">software</option>
+              <option value="advertising">advertising</option>
+              <option value="content creation">content creation</option>
+              <option value="education">education</option>
+              <option value="equipment">equipment</option>
+              <option value="contractor">contractor</option>
+              <option value="meta_ads">meta_ads</option>
+              <option value="other">other</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Date</label><input id="expEditDate" type="date" class="form-input" /></div>
+          <div class="form-group"><label>Recurring</label>
+            <select id="expEditRecurring" class="form-input">
+              <option value="0">None</option>
+              <option value="1">Monthly — auto-creates on 1st of each month</option>
+              <option value="2">Yearly — auto-creates every January</option>
+            </select>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline" onclick="finCloseExpenseEdit()">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <div class="modal-overlay" id="finModal">
       <div class="modal modal-sm">
         <div class="modal-header"><h2 id="finModalTitle">Log Income</h2>
@@ -72,7 +111,7 @@ async function refreshFinance() {
 
   if (sumR.success)   renderSummary(sumR.data);
   if (incR.success)   renderList('incomeList',  incR.data,  'income');
-  if (expR.success)   renderList('expenseList', expR.data,  'expense');
+  if (expR.success) { finExpenses = expR.data; renderList('expenseList', expR.data, 'expense'); }
   if (catR.success)   renderCatBars(catR.data.expenses);
   if (chartR.success) buildChart(chartR.data);
 }
@@ -97,18 +136,28 @@ function renderSummary(d) {
 function renderList(elId, rows, type) {
   const el = document.getElementById(elId);
   if (!rows.length) { el.innerHTML = '<div class="loading-cell">None this month</div>'; return; }
-  const total = rows.reduce((s, r) => s + r.amount, 0);
-  el.innerHTML = rows.map(r => `
-    <div class="entry-row">
+  const total  = rows.reduce((s, r) => s + r.amount, 0);
+  const isExp  = type === 'expense';
+  el.innerHTML = rows.map(r => {
+    const recTag = isExp && r.recurring
+      ? ` <span style="font-size:10px;color:var(--text-muted);margin-left:4px">${r.recurring === 2 ? '↻ yearly' : '↻ monthly'}</span>`
+      : '';
+    return `
+    <div class="entry-row"${isExp ? ` style="cursor:pointer" onclick="finOpenExpenseEdit(${r.id})"` : ''}>
       <div class="entry-body">
-        <div class="entry-desc">${r.description}</div>
+        <div class="entry-desc">${r.description}${recTag}</div>
         <div class="entry-meta">${r.category} · ${r.date}</div>
       </div>
-      <div class="entry-amount ${type==='expense'?'red':''}">$${r.amount.toLocaleString()}</div>
-      <button class="btn btn-sm" style="color:var(--danger)" onclick="finDelete('${type}',${r.id})">✕</button>
-    </div>`).join('') +
-    `<div class="entry-row total-row"><div class="entry-body"><strong>Total</strong></div>
-      <div class="entry-amount"><strong>$${total.toLocaleString()}</strong></div><div></div></div>`;
+      <div class="entry-amount ${isExp ? 'red' : ''}">$${r.amount.toLocaleString()}</div>
+      ${isExp ? `<button class="btn btn-sm btn-outline" style="font-size:11px;padding:3px 8px" onclick="event.stopPropagation();finOpenExpenseEdit(${r.id})">Edit</button>` : ''}
+      <button class="btn btn-sm" style="color:var(--danger)" onclick="event.stopPropagation();finDelete('${type}',${r.id})">✕</button>
+    </div>`;
+  }).join('') +
+  `<div class="entry-row total-row">
+    <div class="entry-body"><strong>Total</strong></div>
+    <div class="entry-amount"><strong>$${total.toLocaleString()}</strong></div>
+    ${isExp ? '<div></div>' : ''}<div></div>
+  </div>`;
 }
 
 function renderCatBars(cats) {
@@ -176,6 +225,37 @@ async function finDelete(type, id) {
   if (!confirm('Delete this entry?')) return;
   await fetch(`/api/finance/${type === 'income' ? 'income' : 'expenses'}/${id}`, { method: 'DELETE' });
   refreshFinance();
+}
+
+function finOpenExpenseEdit(id) {
+  const exp = finExpenses.find(e => e.id === id);
+  if (!exp) return;
+  document.getElementById('expEditId').value       = exp.id;
+  document.getElementById('expEditDesc').value     = exp.description || '';
+  document.getElementById('expEditAmount').value   = exp.amount || '';
+  document.getElementById('expEditCat').value      = exp.category || 'other';
+  document.getElementById('expEditDate').value     = exp.date || '';
+  document.getElementById('expEditRecurring').value = exp.recurring || 0;
+  document.getElementById('expEditModal').classList.add('open');
+}
+
+function finCloseExpenseEdit() { document.getElementById('expEditModal')?.classList.remove('open'); }
+
+async function finSaveExpense(e) {
+  e.preventDefault();
+  const id = document.getElementById('expEditId').value;
+  const payload = {
+    description: document.getElementById('expEditDesc').value,
+    amount:      document.getElementById('expEditAmount').value,
+    category:    document.getElementById('expEditCat').value,
+    date:        document.getElementById('expEditDate').value,
+    recurring:   parseInt(document.getElementById('expEditRecurring').value, 10),
+  };
+  const res = await fetch(`/api/finance/expenses/${id}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+  }).then(r => r.json());
+  if (res.success) { finCloseExpenseEdit(); refreshFinance(); }
+  else alert(res.error || 'Save failed');
 }
 
 function stepMonth(dir) {

@@ -204,6 +204,41 @@ function setupCron() {
     } catch (e) { console.error('[cron] Task reminder error:', e.message); }
   });
 
+  // 1st of every month at 1am: auto-create recurring expenses
+  cron.schedule('0 1 1 * *', () => {
+    console.log('[cron] Monthly recurring expenses...');
+    try {
+      const db  = getDB();
+      const now = new Date();
+      const month = now.getMonth() + 1;
+      const year  = now.getFullYear();
+      const dateStr = `${year}-${String(month).padStart(2, '0')}-01`;
+
+      // Monthly recurring (recurring = 1) — every month
+      // Yearly recurring (recurring = 2) — only in January
+      const recurring = db.prepare(`
+        SELECT description, category, MAX(amount) as amount
+        FROM expenses
+        WHERE recurring = 1 OR (recurring = 2 AND ? = 1)
+        GROUP BY description, category
+      `).all(month);
+
+      let created = 0;
+      for (const exp of recurring) {
+        const exists = db.prepare(
+          'SELECT id FROM expenses WHERE description=? AND category=? AND month=? AND year=?'
+        ).get(exp.description, exp.category, month, year);
+        if (!exists) {
+          db.prepare(
+            'INSERT INTO expenses (description, amount, category, date, month, year, recurring) VALUES (?,?,?,?,?,?,1)'
+          ).run(exp.description, exp.amount, exp.category, dateStr, month, year);
+          created++;
+        }
+      }
+      console.log(`[cron] Recurring expenses: ${created} created for ${month}/${year}`);
+    } catch (e) { console.error('[cron] Recurring expenses error:', e.message); }
+  });
+
   console.log('Cron jobs scheduled.');
 }
 

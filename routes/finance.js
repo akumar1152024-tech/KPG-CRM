@@ -123,6 +123,30 @@ router.post('/expenses', (req, res) => {
   }
 });
 
+// PUT /api/finance/expenses/:id
+router.put('/expenses/:id', (req, res) => {
+  try {
+    const db = getDB();
+    const { description, amount, category, date, recurring } = req.body;
+    if (!description || !amount) return res.status(400).json({ success: false, error: 'Description and amount required' });
+
+    const d = date ? new Date(date) : new Date();
+    const month = d.getMonth() + 1;
+    const year  = d.getFullYear();
+    const dateStr = d.toISOString().split('T')[0];
+
+    db.prepare(`
+      UPDATE expenses SET description=?, amount=?, category=?, date=?, month=?, year=?, recurring=?
+      WHERE id=?
+    `).run(description, parseFloat(amount), category || 'other', dateStr, month, year, parseInt(recurring) || 0, req.params.id);
+
+    const row = db.prepare('SELECT * FROM expenses WHERE id = ?').get(req.params.id);
+    res.json({ success: true, data: row, message: 'Expense updated' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // DELETE /api/finance/expenses/:id
 router.delete('/expenses/:id', (req, res) => {
   try {
