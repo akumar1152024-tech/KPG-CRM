@@ -254,21 +254,27 @@ router.post('/stripe', async (req, res) => {
                  type === 'charge.failed' ||
                  type === 'invoice.payment_failed';
 
-      email = obj.receipt_email ||
-              obj.customer_email ||
+      // Email — invoice events use customer_email at top level
+      email = obj.customer_email ||
+              obj.receipt_email  ||
               obj.billing_details?.email ||
               obj.customer_details?.email ||
               obj.metadata?.email ||
               null;
       console.log('[STRIPE] Email found:', email);
 
-      name = obj.billing_details?.name ||
+      // Name — invoice events use customer_name at top level
+      name = obj.customer_name ||
+             obj.billing_details?.name ||
              obj.customer_details?.name ||
              obj.metadata?.name ||
              null;
 
-      const rawAmount = obj.amount_received ?? obj.amount ?? obj.amount_total ?? 0;
-      amountDollars   = rawAmount > 1000 ? rawAmount / 100 : rawAmount;
+      // Amount — invoice events use total/amount_paid, payment_intent uses amount_received/amount
+      // Stripe native events always send cents — divide by 100 unconditionally
+      const rawAmount = obj.total ?? obj.amount_paid ?? obj.amount_due ??
+                        obj.amount_received ?? obj.amount ?? obj.amount_total ?? 0;
+      amountDollars = rawAmount / 100;
       console.log('[STRIPE] Amount:', amountDollars, '| raw cents:', rawAmount);
 
       description = obj.description || obj.metadata?.description || `Stripe ${type}`;
