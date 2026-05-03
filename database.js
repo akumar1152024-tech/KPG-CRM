@@ -137,6 +137,24 @@ function initDB() {
       cached_at TEXT DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS boosted_posts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      post_id TEXT UNIQUE,
+      caption TEXT,
+      media_type TEXT,
+      media_url TEXT,
+      impressions INTEGER DEFAULT 0,
+      reach INTEGER DEFAULT 0,
+      likes INTEGER DEFAULT 0,
+      comments INTEGER DEFAULT 0,
+      saves INTEGER DEFAULT 0,
+      is_boosted INTEGER DEFAULT 0,
+      spend REAL DEFAULT 0,
+      posted_at TEXT,
+      scraped_at TEXT DEFAULT (datetime('now')),
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS email_sequences (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
