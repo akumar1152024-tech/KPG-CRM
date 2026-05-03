@@ -254,11 +254,13 @@ router.post('/stripe', async (req, res) => {
                  type === 'charge.failed' ||
                  type === 'invoice.payment_failed';
 
-      // Email — invoice events use customer_email at top level
+      // Email — check top-level fields first, then dig into nested charge data
       email = obj.customer_email ||
               obj.receipt_email  ||
               obj.billing_details?.email ||
               obj.customer_details?.email ||
+              obj.charges?.data?.[0]?.billing_details?.email ||
+              obj.charges?.data?.[0]?.receipt_email ||
               obj.metadata?.email ||
               null;
       console.log('[STRIPE] Email found:', email);
@@ -291,19 +293,16 @@ router.post('/stripe', async (req, res) => {
       console.log('[STRIPE] Email found:', email, '| Amount:', amountDollars);
     }
 
-    if (!email && !name) {
-      console.warn('[STRIPE] No email or name found — logged, no client action taken');
-      return;
-    }
-
-    const client = findOrCreateClient(db, email, name);
-    console.log('[STRIPE] Client found/created:', client ? `id=${client.id} name=${client.name}` : 'null');
-
+    // Always log income regardless of whether email was found
     if (!isFailed && amountDollars > 0) {
+      // Find/create client only if we have identifying info
+      const client = (email || name) ? findOrCreateClient(db, email, name) : null;
+      console.log('[STRIPE] Client found/created:', client ? `id=${client.id} name=${client.name}` : 'null (no email/name — income still logged)');
+
       const d = new Date();
       db.prepare('INSERT INTO income (description, amount, category, stripe_payment_id, client_id, date, month, year) VALUES (?,?,?,?,?,?,?,?)')
         .run(
-          description || `Stripe payment from ${name || email}`,
+          description || `Stripe payment${name ? ' from ' + name : email ? ' from ' + email : ''}`,
           amountDollars,
           'stripe payment',
           paymentId || null,
@@ -312,7 +311,7 @@ router.post('/stripe', async (req, res) => {
           d.getMonth() + 1,
           d.getFullYear()
         );
-      console.log('[STRIPE] Income inserted');
+      console.log('[STRIPE] Income inserted — amount:', amountDollars, '| client_id:', client?.id ?? 'null');
 
       if (client) {
         db.prepare("INSERT INTO interactions (client_id, type, summary, date) VALUES (?,?,?,date('now'))")
@@ -320,10 +319,15 @@ router.post('/stripe', async (req, res) => {
         await maybeRunSequence(client.id, 'payment_received');
         console.log('[STRIPE] Interaction logged + sequence triggered for client:', client.name);
       }
-    } else if (isFailed && client) {
-      const { runAutomation } = require('../services/automations');
-      await runAutomation('paymentFailed', client.id);
-      console.log('[STRIPE] paymentFailed automation triggered for client:', client.name);
+    } else if (isFailed) {
+      const client = (email || name) ? findOrCreateClient(db, email, name) : null;
+      if (client) {
+        const { runAutomation } = require('../services/automations');
+        await runAutomation('paymentFailed', client.id);
+        console.log('[STRIPE] paymentFailed automation triggered for client:', client.name);
+      } else {
+        console.log('[STRIPE] Payment failed but no client identified — no automation triggered');
+      }
     } else {
       console.log('[STRIPE] No action taken — isFailed:', isFailed, '| amountDollars:', amountDollars);
     }
