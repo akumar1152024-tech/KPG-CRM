@@ -385,6 +385,9 @@ router.post('/calendly', (req, res) => {
     const client = db.prepare('SELECT * FROM clients WHERE email = ?').get(email);
     if (client) {
       db.prepare("INSERT INTO interactions (client_id, type, summary, date) VALUES (?,?,?,date('now'))").run(client.id, 'calendly_booking', note);
+    } else {
+      const lead = db.prepare('SELECT * FROM leads WHERE email = ?').get(email);
+      if (lead) db.prepare("UPDATE leads SET notes=COALESCE(NULLIF(notes,'') || char(10), '') || ? WHERE id=?").run(note, lead.id);
     }
     res.json({ success: true, message: `Calendly booking from ${name || email} processed` });
   } catch (err) {
@@ -436,6 +439,8 @@ router.post('/instagram-dm', async (req, res) => {
     const client = sender_name ? db.prepare("SELECT * FROM clients WHERE name LIKE ?").get(`%${sender_name}%`) : null;
     if (client) {
       db.prepare("INSERT INTO interactions (client_id, type, summary, date) VALUES (?,?,?,date('now'))").run(client.id, 'dm', `Instagram DM: ${preview}`);
+    } else if (preview !== '(no message)') {
+      db.prepare("UPDATE leads SET notes=? WHERE id=? AND (notes IS NULL OR notes='')").run(`First DM: ${preview}`, lead.id);
     }
     await maybeRunSequence(lead.id, 'new_lead');
     res.json({ success: true, message: `Instagram DM from ${sender_name || 'unknown'} captured` });
@@ -459,6 +464,8 @@ router.post('/whatsapp', async (req, res) => {
     if (client) {
       db.prepare("INSERT INTO interactions (client_id, type, summary, date) VALUES (?,?,?,date('now'))")
         .run(client.id, 'whatsapp', `WhatsApp: ${(message || '').substring(0, 200)}`);
+    } else if (message) {
+      db.prepare("UPDATE leads SET notes=? WHERE id=? AND (notes IS NULL OR notes='')").run(`First WhatsApp: ${message.substring(0, 200)}`, lead.id);
     }
     await maybeRunSequence(lead.id, 'new_lead');
     res.json({ success: true, message: `WhatsApp message from ${name || phone} captured` });
@@ -480,6 +487,10 @@ router.post('/gmail', (req, res) => {
     if (client) {
       db.prepare("INSERT INTO interactions (client_id, type, summary, date) VALUES (?,?,?,date('now'))")
         .run(client.id, 'email', `Email received: "${subject || 'no subject'}" — ${(snippet || '').substring(0, 150)}`);
+    } else {
+      const notes = [subject ? `Subject: ${subject}` : null, snippet || null].filter(Boolean).join(' | ');
+      const lead = findOrCreateLead(db, from_email, from_name, null, null, 'Gmail');
+      if (notes && lead) db.prepare('UPDATE leads SET notes=? WHERE id=? AND (notes IS NULL OR notes="")').run(notes.substring(0, 500), lead.id);
     }
     res.json({ success: true, message: `Gmail from ${from_name || from_email} logged` });
   } catch (err) {
