@@ -415,12 +415,32 @@ router.post('/mailchimp', (req, res) => {
 router.post('/manychat', async (req, res) => {
   const db = getDB();
   try {
-    const { email, name, phone, tag } = req.body;
-    logWebhook(db, '/webhooks/manychat', req.body);
-    if (!email && !name) return res.status(400).json({ success: false, error: 'email or name required' });
-    const lead = findOrCreateLead(db, email, name, phone, 'ManyChat', tag ? `Tag: ${tag}` : 'ManyChat');
+    const b = req.body;
+    console.log('[ManyChat] Raw body:', JSON.stringify(b));
+    logWebhook(db, '/webhooks/manychat', b);
+
+    const email = b.email || b.Email || null;
+
+    const firstName = b.first_name || b.firstName || '';
+    const lastName  = b.last_name  || b.lastName  || '';
+    const fullFromParts = [firstName, lastName].filter(Boolean).join(' ');
+    const name = b.name || b.full_name || b.subscriber_name || b.contact_name || fullFromParts || null;
+
+    const phone = b.phone || b.phone_number || b.whatsapp_phone || null;
+
+    const tag = b.tag || null;
+
+    let lead;
+    if (email || name || phone) {
+      lead = findOrCreateLead(db, email, name, phone, 'ManyChat', tag ? `Tag: ${tag}` : 'ManyChat');
+    } else {
+      // No identifying info at all — create a placeholder and store full body so nothing is lost
+      lead = findOrCreateLead(db, null, 'ManyChat Contact', null, 'ManyChat', 'ManyChat');
+      db.prepare("UPDATE leads SET notes=? WHERE id=? AND (notes IS NULL OR notes='')").run(JSON.stringify(b).substring(0, 500), lead.id);
+    }
+
     await maybeRunSequence(lead.id, 'new_lead');
-    res.json({ success: true, message: `ManyChat lead ${name || email} captured` });
+    res.json({ success: true, message: `ManyChat lead ${name || email || phone || 'unknown'} captured` });
   } catch (err) {
     console.error('/webhooks/manychat error:', err.message);
     res.status(500).json({ success: false, error: err.message });
