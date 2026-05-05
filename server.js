@@ -185,6 +185,16 @@ function setupCron() {
     } catch (e) { console.error('[cron] Sheets sync error:', e.message); }
   });
 
+  // Every day at 7am: Stripe daily payment sync (catch-all for missed webhooks)
+  cron.schedule('0 7 * * *', async () => {
+    if (!process.env.STRIPE_SECRET_KEY) return;
+    console.log('[cron] Stripe daily sync...');
+    try {
+      const { syncStripePayments } = require('./services/stripe-sync');
+      await syncStripePayments();
+    } catch (e) { console.error('[cron] Stripe sync error:', e.message); }
+  });
+
   // Every day at 8am: task reminder emails
   cron.schedule('0 8 * * *', async () => {
     console.log('[cron] Task reminders...');
