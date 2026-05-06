@@ -416,27 +416,50 @@ router.post('/manychat', async (req, res) => {
   const db = getDB();
   try {
     const b = req.body;
-    console.log('[ManyChat] Raw body:', JSON.stringify(b));
+
+    // Always log the complete raw body so Railway logs show exactly what Zapier sends
+    console.log('[ManyChat] RAW BODY:', JSON.stringify(b, null, 2));
     logWebhook(db, '/webhooks/manychat', b);
 
-    const email = b.email || b.Email || null;
+    // Scan all body keys for a field whose key contains the pattern (case-insensitive)
+    function findByKeyPattern(patterns) {
+      const keys = Object.keys(b);
+      for (const pattern of patterns) {
+        // Exact match first
+        const exact = keys.find(k => k.toLowerCase() === pattern.toLowerCase());
+        if (exact && b[exact]) return String(b[exact]).trim() || null;
+      }
+      for (const pattern of patterns) {
+        // Partial key match
+        const partial = keys.find(k => k.toLowerCase().includes(pattern.toLowerCase()));
+        if (partial && b[partial]) return String(b[partial]).trim() || null;
+      }
+      return null;
+    }
 
-    const firstName = b.first_name || b.firstName || '';
-    const lastName  = b.last_name  || b.lastName  || '';
-    const fullFromParts = [firstName, lastName].filter(Boolean).join(' ');
-    const name = b.name || b.full_name || b.subscriber_name || b.contact_name || fullFromParts || null;
+    const email = findByKeyPattern(['email', 'mail', 'e_mail', 'e-mail']);
 
-    const phone = b.phone || b.phone_number || b.whatsapp_phone || null;
+    // Build name: try composite first_name + last_name, then single name fields
+    const fn  = findByKeyPattern(['first_name', 'firstname', 'fname', 'given_name']);
+    const ln  = findByKeyPattern(['last_name', 'lastname', 'lname', 'family_name', 'surname']);
+    const fullFromParts = [fn, ln].filter(Boolean).join(' ');
+    const name = fullFromParts ||
+                 findByKeyPattern(['full_name', 'fullname', 'name', 'subscriber', 'contact_name', 'display_name', 'user_name', 'username']);
+
+    const phone = findByKeyPattern(['phone', 'mobile', 'cell', 'whatsapp', 'tel', 'number', 'msisdn']);
 
     const tag = b.tag || null;
+
+    console.log(`[ManyChat] Resolved — email:${email} name:${name} phone:${phone} tag:${tag}`);
 
     let lead;
     if (email || name || phone) {
       lead = findOrCreateLead(db, email, name, phone, 'ManyChat', tag ? `Tag: ${tag}` : 'ManyChat');
     } else {
-      // No identifying info at all — create a placeholder and store full body so nothing is lost
+      // Zero identifying info — store full raw body as notes so nothing is ever lost
       lead = findOrCreateLead(db, null, 'ManyChat Contact', null, 'ManyChat', 'ManyChat');
       db.prepare("UPDATE leads SET notes=? WHERE id=? AND (notes IS NULL OR notes='')").run(JSON.stringify(b).substring(0, 500), lead.id);
+      console.log('[ManyChat] No name/email/phone found — stored raw body in lead notes. Check Zapier field mapping.');
     }
 
     await maybeRunSequence(lead.id, 'new_lead');
